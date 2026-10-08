@@ -129,3 +129,13 @@ test("issue -> identity provider: PR for human review with the redirect URI and 
   assert.match(c[2].body, /callback\/issue-idp/);
   assert.match(c[2].body, /_roamid\.example\.org/);
 });
+
+test("issue -> branch only when the workflow token may not open pull requests", async () => {
+  const g = ghMock();
+  const api = async (path, opt = {}) => { if (path === "/pulls" && opt.method === "POST") throw new Error("POST /pulls: HTTP 403 not permitted"); return g.api(path, opt); };
+  const r = await handleIssue(issue(appBody()), { api, repo: "FadianRoam/roamid", log() {} });
+  assert.equal(r.action, "branch");
+  assert.ok(g.calls.some(([m, p]) => m === "PUT" && p === "/contents/registry/clients/issue-portal.json"));
+  const c = g.calls.filter(([m, p]) => m === "POST" && p === "/issues/9/comments").pop();
+  assert.match(c[2].body, /compare\/main\.\.\.issue-9/);
+});

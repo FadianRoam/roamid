@@ -320,7 +320,7 @@ export async function createReport(env, r) {
     .bind(id, r.kind, r.target_kind, r.target_id, r.category, r.description, r.contact_email || null, r.context, r.reporter_hash, now()).run();
   const ticket = await notifyOperator(env, {
     subject: `RoamID ${r.kind === "appeal" ? "appeal" : "report"}: ${r.target_kind} ${r.target_id} (${r.category})`,
-    body: `${r.kind === "appeal" ? "Appeal" : "Report"} ${id}\nTarget: ${r.target_kind} ${r.target_id}\nCategory: ${r.category}\nContact: ${r.contact_email || "-"}\nContext: ${r.context || "-"}\n\n${r.description}\n\nQueue: ${env.BASE_URL}/admin/target/${r.target_kind}/${r.target_id}`,
+    body: `${r.kind === "appeal" ? "Appeal" : "Report"} ${id}\nTarget: ${r.target_kind} ${r.target_id}\nCategory: ${r.category}\nContact: ${r.contact_email || "-"}\nContext: ${r.context || "-"}\n\n${r.description}\n\nReports: ${env.BASE_URL}/admin/reports#${id}\nTarget: ${env.BASE_URL}/admin/target/${r.target_kind}/${r.target_id}`,
   });
   if (ticket) await env.DB.prepare("UPDATE reports SET ticket = ? WHERE id = ?").bind(ticket, id).run();
   return id;
@@ -415,8 +415,8 @@ export async function handleAdmin(request, env, p) {
     const groups = new Map();
     for (const r of results || []) {
       const k = `${r.target_kind}:${r.target_id}`;
-      const g = groups.get(k) || { target_kind: r.target_kind, target_id: r.target_id, open: 0, appeals: 0, reporters: new Set(), categories: new Set(), latest: 0 };
-      g.open++; if (r.kind === "appeal") g.appeals++;
+      const g = groups.get(k) || { target_kind: r.target_kind, target_id: r.target_id, open: 0, appeals: 0, reporters: new Set(), categories: new Set(), latest: 0, ids: [] };
+      g.open++; g.ids.push(r.id); if (r.kind === "appeal") g.appeals++;
       if (r.kind === "report" && t0 - r.created_at < 86400) g.reporters.add(r.reporter_hash);
       if (r.kind === "report") g.categories.add(r.category);
       g.latest = Math.max(g.latest, r.created_at);

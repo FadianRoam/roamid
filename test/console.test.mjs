@@ -252,6 +252,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   assert.equal(h.tickets.length, 1, "a help desk ticket for the operator");
   assert.equal(h.tickets[0].key, "hd-key");
   assert.equal(row.ticket, "T-1");
+  assert.ok(h.tickets[0].body.body.includes(`${BASE}/admin/reports#${row.id}`), "the ticket links to the report in the queue");
   // A report alone changes nothing.
   assert.equal((await h.db.prepare("SELECT status FROM apps WHERE client_id = ?").bind(c.id).first()).status, "active");
   // Only operators see the queue.
@@ -260,6 +261,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   await consoleLogin(h, USERS.olga);
   const queue = await (await h.request("/admin/reports")).text();
   assert.match(queue, new RegExp(c.id));
+  assert.match(queue, new RegExp(`id="${row.id}"`), "the ticket's anchor exists in the queue");
   // Bob holds a code issued before the suspension.
   const before = await signIn(h, c.id, USERS.bob);
   await consoleLogin(h, USERS.olga);

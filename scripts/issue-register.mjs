@@ -65,7 +65,19 @@ export async function handleIssue(issue, { api, repo, log = console.log }) {
   await api(`/contents/${path}`, { method: "PUT", body: { message: "update", content: b64(JSON.stringify(entry, null, 2) + "\n"), branch, ...(prev ? { sha: prev.sha } : {}) } });
   const open = await api(`/pulls?state=open&head=${repo.split("/")[0]}:${branch}`);
   let pr = open[0];
-  if (!pr) pr = await api("/pulls", { method: "POST", body: { title: "update", head: branch, base: "main", body: `Registration from #${issue.number} (issue form, opened by ${quote(issue.user.login, 40)}). ${kind === "app" ? "Applications that pass the automated review are merged automatically." : "Identity providers are reviewed by a maintainer."}` } });
+  if (!pr) {
+    try {
+      pr = await api("/pulls", { method: "POST", body: { title: "update", head: branch, base: "main", body: `Registration from #${issue.number} (issue form, opened by ${quote(issue.user.login, 40)}). ${kind === "app" ? "Applications that pass the automated review are merged automatically." : "Identity providers are reviewed by a maintainer."}` } });
+    } catch (e) {
+      // The organization may not allow the workflow token to open pull
+      // requests: the branch is ready, a maintainer opens it.
+      if (!/HTTP 403/.test(e.message)) throw e;
+      await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
+      await comment(`The entry is on branch \`${branch}\` (${quote(path)}). A maintainer opens the pull request: https://github.com/${repo}/compare/main...${branch}?expand=1\n\n${(kind === "app" ? clientInstructions(entry) : idpInstructions(entry)).map((x) => `    ${x}`).join("\n")}`);
+      log(`#${issue.number}: branch ${branch} ready; pull request not allowed for the workflow token`);
+      return { action: "branch", branch, path, entry };
+    }
+  }
   // Pull requests opened with the workflow token do not start pull_request
   // workflows: run the check for the branch explicitly.
   await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
