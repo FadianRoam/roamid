@@ -119,3 +119,9 @@ test("base stylesheet: linked by default; omitted when the platform ships it", a
   const h = await setup();
   assert.match(await (await h.request("/idps")).text(), /<link rel="stylesheet" href="\/assets\/roamid\.[0-9a-f]+\.css">/);
 });
+
+test("/status shows the build marker of the platform module", async () => {
+  const h = await setup();
+  assert.match(await (await h.request("/status")).text(), /<code id="build">public<\/code>/);
+  assert.equal((await (await h.request("/status.json")).json()).build, "public");
+});
