@@ -118,11 +118,60 @@ test("transparency sync: values are escaped, no mentions, no markup; issues once
   const iss = issueFor({ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "@everyone see <img src=x>", decision_id: 1 }, [{ id: 1, date: "2026-10-08T12:00:00Z", decision: "suspend" }]);
   assert.doesNotMatch(iss.body, /@everyone|<img/);
   const calls = [];
-  const api = async (path, opt = {}) => { calls.push([opt.method || "GET", path]); if (path.startsWith("/contents/")) { if (!opt.method) throw new Error("404"); return {}; } if (path.startsWith("/issues?")) return [{ number: 9, state: "open", body: "<!-- roamid-publication:5 -->" }]; if (path === "/issues") return { number: 10 }; return {}; };
+  const H = "h".repeat(40);
+  const api = async (path, opt = {}) => {
+    calls.push([opt.method || "GET", path, opt.body]);
+    if (path === "/git/ref/heads/main") return { object: { sha: "m".repeat(40) } };
+    if (path.startsWith("/git/ref/heads/transparency/")) throw new Error("404");
+    if (path.startsWith("/contents/")) { if (!opt.method) throw new Error("404"); return { commit: { sha: H } }; }
+    if (path.startsWith("/issues?")) return [{ number: 9, state: "open", body: "<!-- roamid-publication:5 -->" }];
+    if (path === "/issues") return { number: 10 };
+    if (path.startsWith("/pulls?")) return [];
+    if (path === "/pulls") return { number: 77 };
+    if (path.startsWith(`/commits/${H}/check-runs`)) return { check_runs: [{ status: "completed", conclusion: "success" }] };
+    return {};
+  };
   const fetchFn = async (u) => Response.json(String(u).includes("publications") ? { items: [{ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "t" }, { id: 6, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-y", category: "fraud", text: "u" }], next_after: null } : { items: [{ id: 1, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", decision: "suspend", reason: "r" }], next_after: null });
-  await sync({ api, fetchFn, log() {} });
+  await sync({ api, fetchFn, log() {}, today: "2026-10-08" });
   assert.equal(calls.filter(([m, p]) => m === "POST" && p === "/issues").length, 1, "publication 5 has an issue already; only 6 is opened");
-  assert.ok(calls.some(([m, p]) => m === "PUT" && p === "/contents/transparency/2026/10.md"));
+  const puts = calls.filter(([m, p]) => m === "PUT" && p.startsWith("/contents/"));
+  assert.ok(puts.length && puts.every(([, , b]) => b.branch === "transparency/2026-10-08"), "never committed to main; always to the transparency/<date> branch");
+  assert.ok(puts.some(([, p]) => p === "/contents/transparency/2026/10.md"));
+  assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/git/refs" && b.ref === "refs/heads/transparency/2026-10-08"));
+  assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/pulls" && b.base === "main" && b.head === "transparency/2026-10-08" && b.title === "update"));
+  assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/check.yml/dispatches" && b.ref === "transparency/2026-10-08"));
+  assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches" && b.inputs.pr === "77"));
+});
+
+test("automerge: transparency pull requests only from the bot, its branch and its files", async () => {
+  const tf = (filename) => ({ filename, content: "x" });
+  const bot = { user: { login: "github-actions[bot]" }, head: { sha: "a".repeat(40), ref: "transparency/2026-10-08", repo: { full_name: REPO } } };
+  let g = gh({ files: [tf("transparency/2026/10.md"), tf("transparency/2026/10.json")], pr: bot });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.equal(merges(g.calls), 1, "the bot's record is merged");
+  for (const [files, pr, why] of [
+    [[tf("transparency/2026/10.md")], { ...bot, user: { login: "mallory" } }, "another author"],
+    [[tf("transparency/2026/10.md")], { ...bot, head: { ...bot.head, ref: "issue-3" } }, "another branch"],
+    [[tf("transparency/2026/10.md")], { ...bot, head: { ...bot.head, repo: { full_name: "mallory/roamid" } } }, "a fork"],
+    [[tf("transparency/2026/10.md"), tf("src/index.js")], bot, "a code file alongside"],
+    [[tf("transparency/2026/10.md"), tf("registry/clients/x.json")], bot, "a client file alongside"],
+    [[tf("transparency/notes.md")], bot, "another file name"],
+  ]) {
+    g = gh({ files, pr });
+    await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+    assert.equal(merges(g.calls), 0, why);
+  }
+  g = gh({ files: [tf("transparency/2026/10.md")], pr: bot, conclusion: "failure" });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.equal(merges(g.calls), 0, "a failed check");
+});
+
+test("workflows: every action is pinned to a full commit SHA", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  for (const f of readdirSync(new URL("../.github/workflows/", import.meta.url))) {
+    const s = readFileSync(new URL(`../.github/workflows/${f}`, import.meta.url), "utf8");
+    for (const m of s.matchAll(/uses:\s*(\S+)/g)) assert.match(m[1], /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, `${f}: ${m[1]}`);
+  }
 });
 
 test("automerge: a pull_request run held for approval is not a verdict; the dispatched run for the same commit is", async () => {

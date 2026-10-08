@@ -107,8 +107,19 @@ Addresses are stored only as truncated hashes, per window.
    客服系统：每条举报与申诉都在 Trust Review 组（主题「Trust Score review」）新建工单，工单写明对象并链接到 `https://<host>/admin/reports#<report-id>`。
 2. `/admin/reports`: the operator queue, for the accounts in `OPERATOR_SUBS`. Items are grouped by target and ordered by distinct reporters in 24 hours; `#<report-id>` scrolls to the report. Decisions and "Publish report" are taken on the target page.
    `/admin/reports`：运营方队列，仅 `OPERATOR_SUBS` 中的账户可访问。条目按对象分组，按 24 小时内不同举报者数排序；`#<report-id>` 定位到该举报。处理与「公开举报」在对象页面进行。
-3. Public record: decisions at `/transparency.json` and in `transparency/` (workflow `transparency`, hourly); published reports as issues labelled `report-upheld`. Appeals filed with the issue form reach the queue through `POST /admin/appeal` (`APPEAL_TOKEN`, workflow `issue-register`).
+3. Public record: decisions at `/transparency.json` and in `transparency/` (workflow `transparency`, hourly, by pull request); published reports as issues labelled `report-upheld`. Appeals filed with the issue form reach the queue through `POST /admin/appeal` (`APPEAL_TOKEN`, workflow `issue-register`).
    公开记录：处理结果见 `/transparency.json` 与 `transparency/`（工作流 `transparency`，每小时）；公开的举报为带 `report-upheld` 标签的 issue。通过 issue 表单提交的申诉经 `POST /admin/appeal`（`APPEAL_TOKEN`，工作流 `issue-register`）进入队列。
+
+## Repository protection / 仓库保护
+
+- `main` cannot be deleted or force-pushed, by anyone. Every change is a pull request with the required status check `check`.
+  `main` 不能被任何人删除或强制推送。所有改动都经拉取请求，且必须通过状态检查 `check`。
+- `.github/CODEOWNERS`: every path needs a code owner's review, except `registry/clients/` and `transparency/`. Those pull requests are merged by the automatic review (`automerge`): application entries that pass the review, and the transparency record opened by `github-actions[bot]` from a `transparency/<date>` branch.
+  `.github/CODEOWNERS`：除 `registry/clients/` 与 `transparency/` 外，所有路径都需代码所有者审核。这两类拉取请求由自动审核（`automerge`）合并：通过审核的应用条目，以及由 `github-actions[bot]` 从 `transparency/<日期>` 分支提交的公开记录。
+- Pull requests opened by a workflow start no `pull_request` workflow: the bot dispatches `check` on the branch, waits for the check run on the head commit, then starts `automerge` for that pull request. The schedule (twice an hour) picks up anything left.
+  由工作流创建的拉取请求不会触发 `pull_request` 工作流：机器人在分支上启动 `check`，等待头提交上的检查完成，再为该拉取请求启动 `automerge`。定时任务（每小时两次）处理其余情况。
+- Workflow actions are pinned to full commit SHAs.
+  工作流中的 action 均固定到完整提交 SHA。
 
 ## Runbook / 处置手册
 
