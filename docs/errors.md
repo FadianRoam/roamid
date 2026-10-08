@@ -38,7 +38,7 @@ RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error
 | `saml_subject` | The SAML response has no stable user identifier. | SAML 响应中没有稳定的用户标识。 |
 | `saml_status` | The identity provider reported an error. | 身份提供方报告了错误。 |
 | `saml_metadata` | The identity provider's SAML metadata could not be loaded or has expired. | 无法载入身份提供方的 SAML 元数据，或元数据已过期。 |
-| `saml_decrypt_failed` | The encrypted SAML assertion could not be decrypted. | 无法解密加密的 SAML 断言。 |
+| `saml_invalid_response` | The identity provider's SAML response could not be processed. | 无法处理身份提供方的 SAML 响应。 |
 
 Errors that an identity provider returns are counted as `upstream_<error>` and passed to the application as described in rp-integration.md.
 

@@ -100,3 +100,24 @@ node scripts/check.mjs --base origin/main --probe
 ```
 
 It validates the entry, loads the discovery document and checks the TXT records.
+
+## 7. SAML 2.0 identity providers
+
+An entry with `"protocol": "saml2"` describes a SAML 2.0 identity provider (for example Keycloak, Authentik or SimpleSAMLphp in SAML mode). RoamID is the service provider. Schema: `schema/idp-saml2.schema.json`.
+
+| Requirement | Detail |
+|---|---|
+| Service provider metadata | `https://id.fadianro.am/saml/sp/metadata.xml?idp=<id>`: entity ID `https://id.fadianro.am/saml/sp`, the signing and encryption certificate, and the ACS URL `https://id.fadianro.am/saml/acs/<id>`. |
+| Request | SP-initiated. RoamID sends a signed `AuthnRequest` (RSA-SHA256) by HTTP-Redirect to the provider's HTTP-Redirect `SingleSignOnService`. |
+| Response binding | HTTP-POST to `https://id.fadianro.am/saml/acs/<id>`. |
+| Signature | The `Response` or the `Assertion` (or both) MUST be signed with a certificate from the entry or its metadata. Signature algorithms: RSA-SHA256, RSA-SHA512, ECDSA-SHA256/384/512. Digests: SHA-256, SHA-512. Canonicalization: exclusive XML canonicalization without comments (`http://www.w3.org/2001/10/xml-exc-c14n#`). Transforms: enveloped-signature and exclusive canonicalization only. Each signature has exactly one `Reference`, to the ID of the signed element. SHA-1 is refused. |
+| Assertions | Exactly one `Assertion` or `EncryptedAssertion`, a direct child of the `Response`. IDs are unique in the document. The assertion ID is accepted once. |
+| Checks | `Destination` and `Recipient` equal the ACS URL; `InResponseTo` equals the request ID; `Issuer` equals the entity ID; `Audience` equals RoamID's entity ID; `NotBefore` / `NotOnOrAfter` with 120 seconds of clock skew; bearer subject confirmation. |
+| Encryption | Optional. Content encryption MUST be AES-GCM (`http://www.w3.org/2009/xmlenc11#aes128-gcm` or `#aes256-gcm`). AES-CBC (`xmlenc#aes128-cbc`, `#aes256-cbc`) is accepted only when the `Response` itself is signed, because unauthenticated CBC allows the encrypted assertion to be decrypted by an attacker (Jager and Somorovsky, 2011). Key transport: RSA-OAEP (`xmlenc#rsa-oaep-mgf1p`, or `xmlenc11#rsa-oaep` with the same digest for OAEP and MGF1). RSA PKCS#1 v1.5 is refused. Any failure to decrypt or parse an encrypted assertion gives one error, `saml_invalid_response`. |
+| Subject | `sub_source` is `nameid` (a `persistent` NameID) or the name of an attribute with a stable identifier that is never reassigned (`urn:oid:1.3.6.1.4.1.5923.1.1.1.6` eduPersonPrincipalName, `urn:oasis:names:tc:SAML:attribute:subject-id`, `urn:oasis:names:tc:SAML:attribute:pairwise-id`). A `transient` NameID is refused as subject. |
+| Attributes | Read by default: `mail` / `urn:oid:0.9.2342.19200300.100.1.3`, `displayName` / `urn:oid:2.16.840.1.113730.3.1.241`, `cn`, `uid` / `urn:oid:0.9.2342.19200300.100.1.1`, `eduPersonPrincipalName`. Other names are mapped with `attributes`. |
+| Email | `email_attribute_verified: true` declares that the provider releases only verified addresses. `email_authority` is then `authoritative` for addresses in the provider's proven `email_domains` (section 3). |
+| XML | No DTD, no entity declarations. Documents larger than 512 KiB are refused. |
+| Metadata | `metadata_url` (https) is loaded at least every 6 hours. When a load fails the last good copy is used, but never after its `validUntil`. Without `metadata_url`, the entry gives `entity_id`, `sso_url` and `certs`. |
+
+Health of a SAML provider: the metadata loads (or is inline) and one signing certificate is valid now. `/status` warns 30 days before a signing certificate expires.

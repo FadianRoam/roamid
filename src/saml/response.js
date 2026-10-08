@@ -11,7 +11,7 @@
 
 import { NS, SamlError, parseXml, serialize, child, children, descendants, attr, text, parseTime } from "./xml.js";
 import { verifyElement, assertUniqueIds, signatureOf } from "./dsig.js";
-import { decryptAssertion } from "./xmlenc.js";
+import { decryptAssertion, contentMode, DecryptFailure } from "./xmlenc.js";
 
 export const SKEW = 120;
 const BEARER = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
@@ -22,6 +22,36 @@ export const TRANSIENT = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient";
 function one(list, what) {
   if (list.length !== 1) throw new SamlError("saml_invalid", `expected exactly one ${what}, found ${list.length}`);
   return list[0];
+}
+
+export const INVALID_RESPONSE = "the response cannot be processed";
+const PLACEHOLDER = '<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"/>';
+
+// Decrypt and parse an EncryptedAssertion. Every failure on the way (key
+// unwrap, decryption, padding, UTF-8, XML parsing, the root element, nested
+// assertions) gives the same SamlError: same code, same message. The reason
+// goes to the server log only, without plaintext or parser messages, and the
+// parse step runs even when decryption failed (on a fixed placeholder), so
+// there is no early return to time.
+async function openEncryptedAssertion(encEl, keys, allowCbc) {
+  let reason = null, bytes = null;
+  try { bytes = await decryptAssertion(encEl, keys, { allowCbc }); } catch (e) { reason = e instanceof DecryptFailure ? e.reason : "decrypt"; }
+  let aDoc = null, aXml = PLACEHOLDER;
+  try {
+    if (bytes) aXml = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch { reason = reason || "utf-8"; aXml = PLACEHOLDER; }
+  try {
+    const d = parseXml(aXml);
+    const root = d.documentElement;
+    if (root.namespaceURI !== NS.saml || root.localName !== "Assertion") reason = reason || "not an Assertion";
+    else if (descendants(d, NS.saml, "Assertion").length !== 1) reason = reason || "nested assertions";
+    aDoc = d;
+  } catch { reason = reason || "plaintext parse"; }
+  if (reason) {
+    console.warn("[saml] encrypted assertion refused:", reason);
+    throw new SamlError("saml_invalid_response", INVALID_RESPONSE);
+  }
+  return { aDoc, aXml };
 }
 
 // `expected`: { acs, spEntityId, idpEntityId, requestId, certs, keys, now }
@@ -54,15 +84,16 @@ export async function verifyResponse(xml, expected) {
   if (plain.length + enc.length !== 1) throw new SamlError("saml_invalid", "the assertion must be a direct child of the Response");
   let aDoc, aXml;
   if (enc.length) {
-    aXml = await decryptAssertion(enc[0], expected.keys);
-    aDoc = parseXml(aXml);
+    // AES-CBC only inside a Response whose signature was verified above;
+    // refused here, before anything is decrypted.
+    if (contentMode(enc[0]) === "cbc" && !respSigned) throw new SamlError("saml_algorithm", "AES-CBC encryption is accepted only in a signed Response; use AES-GCM");
+    ({ aDoc, aXml } = await openEncryptedAssertion(enc[0], expected.keys, respSigned));
   } else {
     aXml = serialize(r.ownerDocument === doc ? doc : r.ownerDocument);
     aDoc = r.ownerDocument;
   }
   let a = enc.length ? aDoc.documentElement : plain[0];
-  if (a.namespaceURI !== NS.saml || a.localName !== "Assertion") throw new SamlError("saml_invalid", "the decrypted content is not an Assertion");
-  if (descendants(aDoc, NS.saml, "Assertion").length !== 1) throw new SamlError("saml_invalid", "nested assertions");
+  if (!enc.length && descendants(aDoc, NS.saml, "Assertion").length !== 1) throw new SamlError("saml_invalid", "nested assertions");
   if (signatureOf(a)) {
     if (enc.length) assertUniqueIds(aDoc);
     a = parseXml(verifyElement(a, enc.length ? aXml : (respSigned ? serialize(r.ownerDocument) : xml), expected.certs)).documentElement;

@@ -3,7 +3,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setup, login, exchange, pkce, clientEntry, BASE, sha256b64url } from "./_harness.mjs";
-import { FX, samlIdpEntry, samlSpEntry, readRedirect, redirectRequest, buildResponse, readPostPage, IDP_SSO } from "./_saml.mjs";
+import { FX, samlIdpEntry, samlSpEntry, readRedirect, redirectRequest, buildResponse, readPostPage, IDP_SSO, rawEncrypted } from "./_saml.mjs";
+import { decryptStats } from "../src/saml/xmlenc.js";
+import { NS } from "../src/saml/xml.js";
 import { verifyResponse } from "../src/saml/response.js";
 import { parseXml } from "../src/saml/xml.js";
 
@@ -63,12 +65,64 @@ test("signed Response with unsigned assertion is accepted; neither signed is ref
   assert.match(await bad.r.text(), /saml_unsigned/);
 });
 
-test("EncryptedAssertion: AES-256-GCM and AES-256-CBC with RSA-OAEP", async () => {
+test("EncryptedAssertion: AES-GCM in an unsigned Response; AES-CBC only in a signed Response", async () => {
   const h = await samlSetup();
   assert.equal((await samlLoginOk(h, { encryptTo: FX.roamidCert, encMode: "gcm" })).r.status, 302);
-  assert.equal((await samlLoginOk(h, { encryptTo: FX.roamidCert, encMode: "cbc" })).r.status, 302);
+  // Signed Response + CBC: the signature is verified first, then CBC is allowed.
+  assert.equal((await samlLoginOk(h, { encryptTo: FX.roamidCert, encMode: "cbc", signResponse: true })).r.status, 302);
+  // Unsigned Response + CBC: refused before anything is decrypted.
+  const before = decryptStats.calls;
+  const cbc = await samlLoginOk(h, { encryptTo: FX.roamidCert, encMode: "cbc" });
+  assert.equal(cbc.r.status, 400);
+  assert.match(await cbc.r.text(), /saml_algorithm/);
+  assert.equal(decryptStats.calls, before, "decryptAssertion must not run for an unsigned Response with CBC");
+  // GCM still decrypts in an unsigned Response (the counter moves).
+  await samlLoginOk(h, { encryptTo: FX.roamidCert, encMode: "gcm" });
+  assert.equal(decryptStats.calls, before + 1);
   const wrong = await samlLoginOk(h, { encryptTo: FX.otherCert });
-  assert.match(await wrong.r.text(), /saml_decrypt_failed/);
+  assert.match(await wrong.r.text(), /saml_invalid_response/);
+});
+
+// The decryption oracle (Jager and Somorovsky): every way an encrypted
+// assertion can fail to decrypt or parse must look the same from outside.
+test("oracle: bad padding, bad GCM tag, bad plaintexts, truncated data and a foreign key give identical responses", async () => {
+  const h = await samlSetup();
+  const variants = {
+    // CBC with an invalid last padding byte, inside a signed Response (the only place CBC is decrypted).
+    badPadding: { encrypted: () => rawEncrypted({ mode: "cbc", plaintext: Buffer.alloc(32, 0x41), padByte: 0 }), signResponse: true },
+    badGcmTag: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: "<x/>", tamper: (d) => { d[d.length - 1] ^= 1; return d; } }) },
+    notXml: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: "this is not XML at all" }) },
+    badUtf8: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: Buffer.from([0x3c, 0xff, 0xfe, 0x3e]) }) },
+    notAssertion: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: `<saml:Issuer xmlns:saml="${NS.saml}">x</saml:Issuer>` }) },
+    nested: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: `<saml:Assertion xmlns:saml="${NS.saml}" ID="_o"><saml:Advice><saml:Assertion ID="_i"/></saml:Advice></saml:Assertion>` }) },
+    truncated: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: "<x/>", tamper: (d) => d.subarray(0, 20) }) },
+    foreignKey: { encrypted: () => rawEncrypted({ mode: "gcm", plaintext: "<x/>", cert: FX.otherCert }) },
+    cbcBadPaddingSignedLong: { encrypted: () => rawEncrypted({ mode: "cbc", plaintext: Buffer.alloc(48, 0x42), padByte: 200 }), signResponse: true },
+  };
+  const seen = [];
+  const reasons = {};
+  const warn = console.warn;
+  for (const [name, v] of Object.entries(variants)) {
+    console.warn = (...a) => { if (a[0] === "[saml] encrypted assertion refused:") reasons[name] = a[1]; };
+    const pk = await pkce();
+    const ar = await startSaml(h, pk);
+    const enc = v.encrypted();
+    const resp = buildResponse({ acs: ACS, audience: SP_ENTITY, inResponseTo: ar.id, signAssertion: false, signResponse: !!v.signResponse, mutateAssertion: () => enc });
+    const r = await h.request("/saml/acs/samlidp", { method: "POST", body: new URLSearchParams({ SAMLResponse: resp.b64, RelayState: ar.relayState }).toString(), headers: { "CF-Ray": "fixed-ray-id" } });
+    const headers = [...r.headers].filter(([k]) => k !== "date").sort().map((x) => x.join(": ")).join("\n");
+    seen.push({ name, status: r.status, body: await r.text(), headers });
+    console.warn = warn;
+  }
+  // Each variant failed where it was meant to (server log only).
+  assert.deepEqual(reasons, { badPadding: "cbc padding", badGcmTag: "gcm tag", notXml: "plaintext parse", badUtf8: "utf-8", notAssertion: "not an Assertion", nested: "nested assertions", truncated: "gcm length", foreignKey: "key unwrap", cbcBadPaddingSignedLong: "cbc padding" });
+  for (const x of seen) {
+    assert.equal(x.status, seen[0].status, x.name);
+    assert.equal(x.headers, seen[0].headers, x.name);
+    assert.equal(x.body, seen[0].body, `${x.name} differs from ${seen[0].name}`);
+  }
+  assert.equal(seen[0].status, 400);
+  assert.match(seen[0].body, /saml_invalid_response/);
+  assert.match(seen[0].body, /<p class="mono">the response cannot be processed<\/p>/);
 });
 
 for (const [name, mutate] of [
@@ -251,4 +305,77 @@ test("layer: the signature's Reference must point at the element itself", async 
   assert.throws(() => verifyElement(doc.documentElement, moved, [FX.idpCert]), /one Reference to the element itself/);
   const doc2 = parseXml(signed);
   assert.match(verifyElement(doc2.documentElement, signed, [FX.idpCert]), /<x:B>v<\/x:B>/);
+});
+
+// HTTP-Redirect binding: the signed octets and the processed values come
+// from the same single occurrence of each parameter.
+test("Redirect binding: repeated SAML parameters are refused (parser differential)", async () => {
+  const h = await samlSetup();
+  const { sign } = await import("node:crypto");
+  const RSA256 = encodeURIComponent("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256");
+  const signedQuery = (xml, relay = "x", alg = RSA256, hash = "sha256") => {
+    const q = `SAMLRequest=${redirectRequest(xml)}&RelayState=${relay}&SigAlg=${alg}`;
+    return `${q}&Signature=${encodeURIComponent(sign(hash, Buffer.from(q), FX.spKey).toString("base64"))}`;
+  };
+  const good = signedQuery(spAuthnRequest("signed", { id: "_good" }));
+  const forged = redirectRequest(spAuthnRequest("signed", { id: "_forged" }));
+  // Control: the signed request alone is accepted.
+  assert.equal((await h.request(`/saml/idp/sso?${good}`)).status, 303);
+  const refused = async (q, why) => {
+    const r = await h.request(`/saml/idp/sso?${q}`);
+    const body = await r.text();
+    assert.notEqual(r.status, 303, why);
+    assert.equal(r.status, 400, why);
+    assert.match(body, /saml_request/, why);
+    return body;
+  };
+  assert.match(await refused(`SAMLRequest=${forged}&${good}`, "forged first, signed last"), /SAMLRequest appears more than once/);
+  assert.match(await refused(`${good}&SAMLRequest=${forged}`, "signed first, forged last"), /SAMLRequest appears more than once/);
+  assert.match(await refused(`SAML%52equest=${forged}&${good}`, "percent-encoded name"), /SAMLRequest appears more than once/);
+  assert.match(await refused(`${good}&SAMLRequest%3D=${forged}`.replace("SAMLRequest%3D", "SAMLR%65quest"), "encoded name after"), /SAMLRequest appears more than once/);
+  assert.match(await refused(`RelayState=evil&${good}`, "RelayState repeated"), /RelayState appears more than once/);
+  assert.match(await refused(`${good}&SigAlg=${RSA256}`, "SigAlg repeated"), /SigAlg appears more than once/);
+  assert.match(await refused(`${good}&Signature=AAAA`, "Signature repeated"), /Signature appears more than once/);
+  // SHA-1 is not an allowed signature algorithm.
+  const sha1 = signedQuery(spAuthnRequest("signed", { id: "_sha1" }), "x", encodeURIComponent("http://www.w3.org/2000/09/xmldsig#rsa-sha1"), "sha1");
+  assert.match(await refused(sha1, "rsa-sha1"), /signature algorithm not allowed/);
+  // A signature without SigAlg is refused.
+  assert.match(await refused(good.replace(/&SigAlg=[^&]+/, ""), "no SigAlg"), /signature is missing or invalid/);
+});
+
+test("HTTP-POST binding: repeated SAML fields are refused", async () => {
+  const h = await samlSetup();
+  const pk = await pkce();
+  const ar = await startSaml(h, pk);
+  const resp = buildResponse({ acs: ACS, audience: SP_ENTITY, inResponseTo: ar.id });
+  const evil = buildResponse({ acs: ACS, audience: SP_ENTITY, inResponseTo: ar.id, nameId: "victim" });
+  const body = `SAMLResponse=${encodeURIComponent(evil.b64)}&SAMLResponse=${encodeURIComponent(resp.b64)}&RelayState=${encodeURIComponent(ar.relayState)}`;
+  const r = await h.request("/saml/acs/samlidp", { method: "POST", body });
+  assert.equal(r.status, 400);
+  assert.match(await r.text(), /SAMLResponse appears more than once/);
+  const req = Buffer.from(spAuthnRequest("sp")).toString("base64");
+  const r2 = await h.request("/saml/idp/sso", { method: "POST", body: `SAMLRequest=${encodeURIComponent(req)}&RelayState=a&RelayState=b` });
+  assert.equal(r2.status, 400);
+  assert.match(await r2.text(), /RelayState appears more than once/);
+});
+
+test("dsig: only exclusive canonicalization, without comments, is accepted", async () => {
+  const h = await samlSetup();
+  for (const alg of ["http://www.w3.org/TR/2001/REC-xml-c14n-20010315", "http://www.w3.org/2001/10/xml-exc-c14n#WithComments"]) {
+    const { r } = await samlLoginOk(h, { mutateAssertion: (a) => a.replace(/(<ds:CanonicalizationMethod Algorithm=")[^"]+/, `$1${alg}`) });
+    assert.equal(r.status, 400, alg);
+    assert.match(await r.text(), /saml_algorithm/, alg);
+    const t = await samlLoginOk(h, { mutateAssertion: (a) => a.replace(/<ds:Transform Algorithm="http:\/\/www\.w3\.org\/2001\/10\/xml-exc-c14n#"\/>/, `<ds:Transform Algorithm="${alg}"/>`) });
+    assert.equal(t.r.status, 400, `transform ${alg}`);
+    assert.match(await t.r.text(), /saml_algorithm/, `transform ${alg}`);
+  }
+});
+
+test("decryptAssertion itself refuses AES-CBC unless a signature was verified", async () => {
+  const { decryptAssertion, DecryptFailure } = await import("../src/saml/xmlenc.js");
+  const { samlKeys } = await import("../src/saml/certs.js");
+  const { SAML_KEYS } = await import("./_saml.mjs");
+  const el = parseXml(rawEncrypted({ mode: "cbc", plaintext: "<a/>" })).documentElement;
+  await assert.rejects(decryptAssertion(el, samlKeys({ SAML_KEYS })), (e) => e instanceof DecryptFailure && e.reason === "cbc without a verified signature");
+  assert.equal(new TextDecoder().decode(await decryptAssertion(el, samlKeys({ SAML_KEYS }), { allowCbc: true })), "<a/>");
 });

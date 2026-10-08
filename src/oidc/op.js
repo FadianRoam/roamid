@@ -338,7 +338,8 @@ export async function finishLogin(request, env, tx, client, idp, upstreamSub, cl
 export async function samlAcs(request, env, idpId) {
   if (request.method !== "POST") return errorHtml(request, "saml_invalid", { status: 405 });
   if (!(await allow(env, "authorize", await clientIp(request, env)))) return errorHtml(request, "rate_limited", { status: 429 });
-  const f = await readSamlPost(request);
+  let f;
+  try { f = await readSamlPost(request); } catch (e) { return errorHtml(request, "saml_request", { detail: e.message }); }
   if (!f || !f.response || !f.relayState || f.relayState.length > 200) return errorHtml(request, "tx_expired");
   const tx = await env.DB.prepare("SELECT * FROM tx WHERE up_state = ?").bind(await sha256b64url(f.relayState)).first();
   if (!tx || tx.expires <= now()) return errorHtml(request, "tx_expired");

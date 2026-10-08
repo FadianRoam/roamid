@@ -17,7 +17,7 @@ export function authnRequest(env, { id, idpId, destination, forceAuthn, isPassiv
   return `<samlp:AuthnRequest xmlns:samlp="${NS.samlp}" xmlns:saml="${NS.saml}" ID="${id}" Version="2.0" IssueInstant="${samlTime(now)}" Destination="${x(destination)}" AssertionConsumerServiceURL="${x(acsUrl(env, idpId))}" ProtocolBinding="${POST}"${forceAuthn ? ' ForceAuthn="true"' : ""}${isPassive ? ' IsPassive="true"' : ""}><saml:Issuer>${x(spEntityId(env))}</saml:Issuer><samlp:NameIDPolicy AllowCreate="true"/></samlp:AuthnRequest>`;
 }
 
-const keyDescriptors = (keys, uses) => keys.map((k) => uses.map((u) => `<md:KeyDescriptor use="${u}"><ds:KeyInfo xmlns:ds="${NS.ds}"><ds:X509Data><ds:X509Certificate>${certBody(k.cert)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>${u === "encryption" ? '<md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm"/><md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/><md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>' : ""}</md:KeyDescriptor>`).join("")).join("");
+const keyDescriptors = (keys, uses) => keys.map((k) => uses.map((u) => `<md:KeyDescriptor use="${u}"><ds:KeyInfo xmlns:ds="${NS.ds}"><ds:X509Data><ds:X509Certificate>${certBody(k.cert)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>${u === "encryption" ? '<md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm"/><md:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes128-gcm"/><md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>' : ""}</md:KeyDescriptor>`).join("")).join("");
 
 // SP metadata: one AssertionConsumerService per SAML identity provider
 // (or only `idpId`'s).

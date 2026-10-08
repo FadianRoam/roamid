@@ -74,3 +74,23 @@ export function readPostPage(html) {
   const field = (n) => { const m = new RegExp(`name="${n}" value="([^"]*)"`).exec(html); return m ? m[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : null; };
   return { action: action && action[1].replace(/&amp;/g, "&"), response: field("SAMLResponse"), relayState: field("RelayState") };
 }
+
+// An EncryptedAssertion around arbitrary plaintext, for the oracle tests.
+// o: { mode: "gcm"|"cbc", plaintext, padByte (CBC: the last padding byte), tamper(data) -> data, cert }
+export function rawEncrypted(o) {
+  const k = randomBytes(32);
+  const pt = Buffer.isBuffer(o.plaintext) ? o.plaintext : Buffer.from(o.plaintext, "utf8");
+  let data, alg;
+  if (o.mode === "gcm") {
+    const iv = randomBytes(12); const c = createCipheriv("aes-256-gcm", k, iv);
+    data = Buffer.concat([iv, c.update(pt), c.final(), c.getAuthTag()]); alg = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
+  } else {
+    const iv = randomBytes(16); const c = createCipheriv("aes-256-cbc", k, iv); c.setAutoPadding(false);
+    const n = 16 - (pt.length % 16);
+    const pad = Buffer.concat([randomBytes(n - 1), Buffer.from([o.padByte ?? n])]);
+    data = Buffer.concat([iv, c.update(Buffer.concat([pt, pad])), c.final()]); alg = "http://www.w3.org/2001/04/xmlenc#aes256-cbc";
+  }
+  if (o.tamper) data = Buffer.from(o.tamper(Buffer.from(data)));
+  const ek = publicEncrypt({ key: o.cert || FX.roamidCert, padding: constants.RSA_PKCS1_OAEP_PADDING }, k);
+  return `<saml:EncryptedAssertion xmlns:saml="${NS.saml}"><xenc:EncryptedData xmlns:xenc="${NS.xenc}" Type="http://www.w3.org/2001/04/xmlenc#Element"><xenc:EncryptionMethod Algorithm="${alg}"/><ds:KeyInfo xmlns:ds="${NS.ds}"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"><ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/></xenc:EncryptionMethod><xenc:CipherData><xenc:CipherValue>${ek.toString("base64")}</xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue>${data.toString("base64")}</xenc:CipherValue></xenc:CipherData></xenc:EncryptedData></saml:EncryptedAssertion>`;
+}

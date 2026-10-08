@@ -70,8 +70,13 @@ export async function spMetadataHandler(request, env) {
   return text(spMetadata(env, samlKeys(env), ids.length ? ids : ["-"]), { type: "application/samlmetadata+xml; charset=utf-8", cache: "public, max-age=300" });
 }
 
+// The HTTP-POST binding fields. Each may appear at most once: a repeated
+// field is refused rather than resolved to one of its copies.
 export async function readSamlPost(request) {
   const f = await readForm(request);
   if (!f) return null;
+  for (const k of ["SAMLResponse", "SAMLRequest", "RelayState"]) {
+    if (f.getAll(k).length > 1) throw new SamlError("saml_request", `${k} appears more than once`);
+  }
   return { response: f.get("SAMLResponse"), request: f.get("SAMLRequest"), relayState: f.get("RelayState") };
 }

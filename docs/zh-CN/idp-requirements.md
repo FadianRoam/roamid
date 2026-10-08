@@ -82,3 +82,24 @@ node scripts/check.mjs --base origin/main --probe
 ```
 
 它校验条目、载入 discovery 文档并检查 TXT 记录。
+
+## 7. SAML 2.0 身份提供方
+
+`"protocol": "saml2"` 的条目描述一个 SAML 2.0 身份提供方（例如 SAML 模式下的 Keycloak、Authentik、SimpleSAMLphp）。RoamID 是服务方。Schema：`schema/idp-saml2.schema.json`。
+
+| 要求 | 说明 |
+|---|---|
+| 服务方元数据 | `https://id.fadianro.am/saml/sp/metadata.xml?idp=<id>`：实体 ID `https://id.fadianro.am/saml/sp`、签名与加密证书、ACS 地址 `https://id.fadianro.am/saml/acs/<id>`。 |
+| 请求 | 由服务方发起。RoamID 以 HTTP-Redirect 向提供方的 HTTP-Redirect `SingleSignOnService` 发送签名的 `AuthnRequest`（RSA-SHA256）。 |
+| 响应绑定 | HTTP-POST 到 `https://id.fadianro.am/saml/acs/<id>`。 |
+| 签名 | `Response` 或 `Assertion`（或两者）必须用条目或其元数据中的证书签名。签名算法：RSA-SHA256、RSA-SHA512、ECDSA-SHA256/384/512；摘要：SHA-256、SHA-512；规范化：不带注释的排他 XML 规范化（`http://www.w3.org/2001/10/xml-exc-c14n#`）；变换只允许 enveloped-signature 与排他规范化。每个签名恰好一个 `Reference`，指向被签名元素的 ID。拒绝 SHA-1。 |
+| 断言 | 恰好一个 `Assertion` 或 `EncryptedAssertion`，且是 `Response` 的直接子元素；文档内 ID 唯一；断言 ID 只接受一次。 |
+| 校验 | `Destination` 与 `Recipient` 等于 ACS 地址；`InResponseTo` 等于请求 ID；`Issuer` 等于实体 ID；`Audience` 等于 RoamID 的实体 ID；`NotBefore`/`NotOnOrAfter` 允许 120 秒时钟偏差；bearer 主体确认。 |
+| 加密 | 可选。内容加密必须为 AES-GCM（`http://www.w3.org/2009/xmlenc11#aes128-gcm` 或 `#aes256-gcm`）。AES-CBC（`xmlenc#aes128-cbc`、`#aes256-cbc`）只在 `Response` 本身有签名时接受：未经认证的 CBC 可被攻击者用来解密加密断言（Jager 与 Somorovsky，2011）。密钥传输：RSA-OAEP（`xmlenc#rsa-oaep-mgf1p`，或 OAEP 与 MGF1 摘要相同的 `xmlenc11#rsa-oaep`）；拒绝 RSA PKCS#1 v1.5。加密断言解密或解析的任何失败都给出同一个错误 `saml_invalid_response`。 |
+| 主体标识 | `sub_source` 为 `nameid`（`persistent` 格式的 NameID），或一个稳定、不会转给他人的属性名（`urn:oid:1.3.6.1.4.1.5923.1.1.1.6` eduPersonPrincipalName、`urn:oasis:names:tc:SAML:attribute:subject-id`、`urn:oasis:names:tc:SAML:attribute:pairwise-id`）。`transient` NameID 不能作为主体标识。 |
+| 属性 | 默认读取：`mail`/`urn:oid:0.9.2342.19200300.100.1.3`、`displayName`/`urn:oid:2.16.840.1.113730.3.1.241`、`cn`、`uid`/`urn:oid:0.9.2342.19200300.100.1.1`、`eduPersonPrincipalName`。其他名称用 `attributes` 映射。 |
+| 邮箱 | `email_attribute_verified: true` 声明提供方只发出已验证的地址；此时地址在提供方已证明的 `email_domains`（第 3 节）内的，`email_authority` 为 `authoritative`。 |
+| XML | 不允许 DTD 与实体声明；大于 512 KiB 的文档被拒绝。 |
+| 元数据 | `metadata_url`（https）至少每 6 小时载入一次；载入失败时使用最后一份有效副本，但不超过其 `validUntil`。不给 `metadata_url` 时，条目写 `entity_id`、`sso_url`、`certs`。 |
+
+SAML 提供方的健康状态：元数据可载入（或为内联），且当前有一张有效的签名证书。签名证书到期前 30 天，`/status` 显示警告。

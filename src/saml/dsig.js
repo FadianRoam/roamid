@@ -22,8 +22,10 @@ const ALG = {
 export { ALG };
 const SIG_OK = new Set([ALG.rsa256, ALG.rsa512, ALG.ec256, ALG.ec384, ALG.ec512]);
 const DIGEST_OK = new Set([ALG.sha256, ALG.sha512]);
-const C14N_OK = new Set([ALG.exc, ALG.c14n]);
-const TRANSFORM_OK = new Set([ALG.env, ALG.exc, ALG.c14n]);
+// Exclusive canonicalization only (without comments), and as transforms
+// only enveloped-signature and exclusive canonicalization.
+const C14N_OK = new Set([ALG.exc]);
+const TRANSFORM_OK = new Set([ALG.env, ALG.exc]);
 
 // ECDSA for XML-DSig: the signature value is r||s (RFC 4050 / P1363).
 class Ecdsa {
@@ -80,7 +82,9 @@ export function verifyElement(el, docXml, certs) {
   const sm = attr(child(si, NS.ds, "SignatureMethod"), "Algorithm");
   const cm = attr(child(si, NS.ds, "CanonicalizationMethod"), "Algorithm");
   const dm = attr(child(refs[0], NS.ds, "DigestMethod"), "Algorithm");
+  const tfs = child(refs[0], NS.ds, "Transforms");
   const tf = descendants(refs[0], NS.ds, "Transform").map((t) => attr(t, "Algorithm"));
+  if ((tfs ? children(tfs, NS.ds, "Transform").length : 0) !== tf.length || tf.length > 2 || new Set(tf).size !== tf.length) throw new SamlError("saml_algorithm", "unexpected transforms");
   if (!SIG_OK.has(sm)) throw new SamlError("saml_algorithm", `signature algorithm not allowed: ${sm}`);
   if (!C14N_OK.has(cm)) throw new SamlError("saml_algorithm", `canonicalization not allowed: ${cm}`);
   if (!DIGEST_OK.has(dm)) throw new SamlError("saml_algorithm", `digest not allowed: ${dm}`);
