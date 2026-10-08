@@ -49,7 +49,8 @@ async function csrfOf(h, path = "/console") {
 }
 
 async function post(h, path, fields, csrf) {
-  const b = new URLSearchParams({ csrf: csrf ?? (await csrfOf(h)), ...fields });
+  const b = new URLSearchParams({ csrf: csrf ?? (await csrfOf(h)) });
+  for (const [k, v] of Object.entries(fields)) for (const x of [].concat(v)) b.append(k, x);
   return h.request(path, { method: "POST", body: b.toString(), headers: { Origin: "null", "Sec-Fetch-Site": "same-origin" } });
 }
 
@@ -266,7 +267,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   const before = await signIn(h, c.id, USERS.bob);
   await consoleLogin(h, USERS.olga);
   const csrf = await csrfOf(h, "/admin/reports");
-  assert.equal((await post(h, `/admin/target/app/${c.id}/suspend`, { reason: "Phishing page confirmed" }, csrf)).status, 303);
+  assert.equal((await post(h, `/admin/target/app/${c.id}/suspend`, { reason: "Phishing page confirmed", report_ids: [row.id] }, csrf)).status, 303);
   const refused = await h.request(`/authorize?${q}`);
   assert.equal(refused.status, 403);
   const rt = await refused.text();
@@ -280,7 +281,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM reports WHERE kind = 'appeal' AND state = 'open'").first()).n, 1);
   // Ban: no link back to the app; the domain cannot be reused.
   await consoleLogin(h, USERS.olga);
-  await post(h, `/admin/target/app/${c.id}/ban`, { reason: "Illegal site" }, await csrfOf(h, "/admin/reports"));
+  await post(h, `/admin/target/app/${c.id}/ban`, { reason: "Illegal site", own_initiative: "yes" }, await csrfOf(h, "/admin/reports"));
   const banned = await (await h.request(`/authorize?${q}`)).text();
   assert.match(banned, /app_banned/);
   assert.doesNotMatch(banned, /app\.example\.org\/cb\?error/);
@@ -299,7 +300,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
 test("operator emergency override disables an identity provider everywhere", async () => {
   const h = await consoleSetup();
   const jar = new Map(await consoleLogin(h, USERS.olga));
-  await post(h, "/admin/target/idp/good/idp_disable", { reason: "Compromised" }, await csrfOf(h, "/admin/reports"));
+  await post(h, "/admin/target/idp/good/idp_disable", { reason: "Compromised", own_initiative: "yes" }, await csrfOf(h, "/admin/reports"));
   h.cookies = new Map();
   const { pkce: pk0 } = await import("./_harness.mjs");
   const r = await login(h, { client: "spa", pk: await pk0() });
@@ -403,7 +404,7 @@ async function reportAndAct(h, c, { description, noPublish = false, action = "su
   await h.request("/report", { method: "POST", body: new URLSearchParams(body).toString(), headers: { "CF-Connecting-IP": "198.51.100.8" } });
   const rep = await h.db.prepare("SELECT * FROM reports WHERE description = ?").bind(description).first();
   await consoleLogin(h, USERS.olga);
-  await post(h, `/admin/target/app/${c.id}/${action}`, { reason: "Phishing page confirmed" }, await csrfOf(h, "/admin/reports"));
+  await post(h, `/admin/target/app/${c.id}/${action}`, { reason: "Phishing page confirmed", report_ids: [rep.id] }, await csrfOf(h, "/admin/reports"));
   return rep;
 }
 
@@ -443,6 +444,71 @@ test("transparency: decisions are public at once; reports only after the operato
   assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM publications WHERE report_id = ?").bind(rep3.id).first()).n, 0);
   await post(h, `/admin/target/app/${c.id}/publish`, { report_id: rep3.id, text: "Not a phishing page.", publish_dismissed: "yes" }, await csrfOf(h, "/admin/reports"));
   assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM publications WHERE report_id = ?").bind(rep3.id).first()).n, 1);
+});
+
+async function fileReport(h, c, description, category = "phishing") {
+  h.cookies = new Map();
+  await h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, category, description, "orbit-verify-response": "good-token" }).toString(), headers: { "CF-Connecting-IP": "198.51.100.9" } });
+  return h.db.prepare("SELECT * FROM reports WHERE description = ?").bind(description).first();
+}
+const pubOf = async (h, id) => h.db.prepare("SELECT * FROM publications WHERE report_id = ?").bind(id).first();
+
+test("decisions: only ticked reports are upheld; dismiss and lift_limit stay private; publication links the report's own decision", async () => {
+  const h = await consoleSetup();
+  await consoleLogin(h, USERS.alice);
+  const c = await createApp(h);
+  h.txt["_roamid-app.example.org"] = [`roamid-app=${c.id}`];
+  await post(h, `/console/app/${c.id}/check`, {});
+  const a = await fileReport(h, c, "Report A: the login page asks for bank details");
+  const spam = await fileReport(h, c, "Unrelated spam report about something else", "other");
+  await consoleLogin(h, USERS.olga);
+  const csrf = () => csrfOf(h, "/admin/reports");
+  // The target page offers one checkbox per open item.
+  const page = await (await h.request(`/admin/target/app/${c.id}`)).text();
+  assert.match(page, new RegExp(`name="report_ids" value="${a.id}"`));
+  // A report-driven action without a ticked report and without "own initiative" is refused.
+  await post(h, `/admin/target/app/${c.id}/suspend`, { reason: "No basis" }, await csrf());
+  assert.equal((await h.db.prepare("SELECT status FROM apps WHERE client_id = ?").bind(c.id).first()).status, "active");
+  // Dismiss without a ticked item does nothing; dismiss and lift_limit never reach the public record.
+  await post(h, `/admin/target/app/${c.id}/dismiss`, { reason: "x" }, await csrf());
+  assert.equal((await h.db.prepare("SELECT state FROM reports WHERE id = ?").bind(spam.id).first()).state, "open");
+  await post(h, `/admin/target/app/${c.id}/lift_limit`, { reason: "Known community" }, await csrf());
+  let tj = await (await h.request("/transparency.json")).json();
+  assert.equal(tj.items.length, 0, "lift_limit is private");
+  // Suspend based on A only: the spam report stays open, is not upheld and cannot be published.
+  await post(h, `/admin/target/app/${c.id}/suspend`, { reason: "Phishing page confirmed", report_ids: [a.id] }, await csrf());
+  const sp = await h.db.prepare("SELECT * FROM reports WHERE id = ?").bind(spam.id).first();
+  assert.deepEqual([sp.state, sp.outcome, sp.decision_id], ["open", null, null]);
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: spam.id, text: "spam", publish_dismissed: "yes" }, await csrf());
+  assert.equal(await pubOf(h, spam.id), null, "an open report cannot be published");
+  const ra = await h.db.prepare("SELECT * FROM reports WHERE id = ?").bind(a.id).first();
+  assert.equal(ra.outcome, "upheld");
+  tj = await (await h.request("/transparency.json")).json();
+  const suspendId = tj.items.find((d) => d.decision === "suspend").id;
+  assert.equal(ra.decision_id, suspendId);
+  // Now the spam report is dismissed: still nothing public about it.
+  await post(h, `/admin/target/app/${c.id}/dismiss`, { reason: "Not related", report_ids: [spam.id] }, await csrf());
+  tj = await (await h.request("/transparency.json")).json();
+  assert.deepEqual(tj.items.map((d) => d.decision), ["suspend"], "dismiss is private");
+  // Restore, then report B leads to a ban. Publishing A still shows the suspension.
+  await post(h, `/admin/target/app/${c.id}/restore`, { reason: "Fixed" }, await csrf());
+  const b = await fileReport(h, c, "Report B: the page is back and worse");
+  await consoleLogin(h, USERS.olga);
+  await post(h, `/admin/target/app/${c.id}/ban`, { reason: "Illegal site", report_ids: [b.id] }, await csrf());
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: a.id, text: "Report A text" }, await csrf());
+  const pa = (await (await h.request("/transparency.json?kind=publications")).json()).items.find((x) => x.text === "Report A text");
+  assert.ok(pa && pa.upheld);
+  assert.equal(pa.decision_id, suspendId, "A links the suspension, not the later ban");
+  // A dismissed report published explicitly says "Not upheld" and links no decision.
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: spam.id, text: "The report was about another site.", publish_dismissed: "yes" }, await csrf());
+  const ps = await pubOf(h, spam.id);
+  assert.equal(ps.decision_id, null);
+  assert.match(ps.text, /^Not upheld\. /);
+  // Length cap and no private fields in the public record.
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: b.id, text: "x".repeat(9000) }, await csrf());
+  assert.ok((await pubOf(h, b.id)).text.length <= 4000);
+  const raw = JSON.stringify(await (await h.request("/transparency.json?kind=publications")).json()) + JSON.stringify(await (await h.request("/transparency.json")).json());
+  assert.doesNotMatch(raw, /198\.51|reporter_hash|contact_email|context|olga|"sub"/);
 });
 
 test("appeals from GitHub: bearer token, one queue item per issue", async () => {

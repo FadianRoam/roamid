@@ -31,11 +31,11 @@ A report alone does not change anything. It is queued for the operator, and the 
 
 ## Operator actions
 
-The operator reviews reports at `/admin/reports` and can, with a reason that the owner sees:
+The operator reviews reports at `/admin/reports`. Each decision names its basis: the operator ticks the open reports it is based on, and only those are upheld; the other reports stay open. Warn, suspend, ban and an identity provider disable without a ticked report are possible only as the operator's own initiative, which upholds no report. With a reason that the owner sees, the operator can:
 
 | Action | Effect |
 |---|---|
-| Dismiss | The open reports are closed. |
+| Dismiss | The ticked reports are closed as not upheld. Not published. |
 | Warn | The reason is shown to the owners in the console. |
 | Suspend | Sign-in is refused before the picker (`app_suspended`); the application receives `access_denied`; `/token` refuses it. Temporary. |
 | Ban | For illegal sites. Like suspend; the person is not sent back to the application; the domain cannot be used for another application. |
@@ -56,7 +56,7 @@ Every operator decision is public: warn, suspend, ban and restore for applicatio
 
 - The record is available at `/transparency.json` (read-only, paged by `?after=<n>`), and mirrored every hour into this repository under `transparency/YYYY/MM.md` and `transparency/YYYY/MM.json`.
 - A report's text is published only when the operator chooses "Publish report" for it after the decision. The operator edits a redacted copy first: email addresses and phone numbers are removed and links are made non-clickable (`hxxps://example[.]com`). Published reports also appear as issues labelled `report-upheld`, titled "Report: <category> — <target id>".
-- A dismissed report is not published unless the operator explicitly chooses to publish it.
+- A published report links the decision it was upheld by. A dismissed report is not published unless the operator explicitly chooses to; it is then marked "Not upheld" and linked to no decision. Dismissals and lifted limits are not part of the public record.
 - When the reporter chose "Do not publish my description", only the category and the decision are published.
 - An entry that was published in error is marked as withdrawn with a reason; it is not deleted.
 

@@ -12,7 +12,7 @@ const entry = (id, o = {}) => ({ client_id: id, protocol: "oidc", name: { en: `P
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
 
 // A GitHub API double: one pull request with `files` (filename, status, content).
-function gh({ files, pr: prOver = {}, conclusion = "success", headLater } = {}) {
+function gh({ files, pr: prOver = {}, conclusion = "success", headLater, runs } = {}) {
   const calls = [];
   const pr = { number: 7, state: "open", draft: false, head: { sha: "a".repeat(40) }, base: { ref: "main", repo: { full_name: REPO } }, user: { login: "bob" }, changed_files: files.length, ...prOver };
   let prReads = 0;
@@ -20,7 +20,7 @@ function gh({ files, pr: prOver = {}, conclusion = "success", headLater } = {}) 
     calls.push([opt.method || "GET", path]);
     if (path === "/pulls/7") { prReads++; return headLater ? { ...pr, head: { sha: headLater } } : pr; }
     if (path.startsWith("/pulls?")) return [pr];
-    if (path.startsWith("/actions/runs")) return { workflow_runs: [{ name: "check", event: "pull_request", run_number: 3, status: "completed", conclusion }] };
+    if (path.startsWith("/actions/runs")) return { workflow_runs: runs || [{ name: "check", event: "pull_request", run_number: 3, status: "completed", conclusion }] };
     const m = /^\/pulls\/7\/files\?per_page=100&page=(\d+)$/.exec(path);
     if (m) { const p = Number(m[1]); return files.slice((p - 1) * 100, p * 100).map((f) => ({ filename: f.filename, status: f.status || "added" })); }
     if (path.startsWith("/contents/")) { const f = files.find((x) => path.startsWith(`/contents/${x.filename}?`)); return { content: b64(f.content) }; }
@@ -123,4 +123,17 @@ test("transparency sync: values are escaped, no mentions, no markup; issues once
   await sync({ api, fetchFn, log() {} });
   assert.equal(calls.filter(([m, p]) => m === "POST" && p === "/issues").length, 1, "publication 5 has an issue already; only 6 is opened");
   assert.ok(calls.some(([m, p]) => m === "PUT" && p === "/contents/transparency/2026/10.md"));
+});
+
+test("automerge: a pull_request run held for approval is not a verdict; the dispatched run for the same commit is", async () => {
+  const held = { name: "check", event: "pull_request", run_number: 9, status: "completed", conclusion: "action_required" };
+  let g = gh({ files: [clientFile("bot-app")], runs: [held, { name: "check", event: "workflow_dispatch", run_number: 8, status: "completed", conclusion: "success" }] });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.equal(merges(g.calls), 1);
+  g = gh({ files: [clientFile("bot-app")], runs: [held, { name: "check", event: "workflow_dispatch", run_number: 8, status: "completed", conclusion: "failure" }] });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.equal(merges(g.calls), 0, "a failed dispatched run still refuses");
+  g = gh({ files: [clientFile("bot-app")], runs: [held] });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.equal(merges(g.calls), 0, "only a held run: nothing ran, nothing merged");
 });

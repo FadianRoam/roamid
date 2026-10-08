@@ -38,10 +38,10 @@ export function renderMonth(month, items) {
 }
 
 export function issueFor(p, decisions) {
-  const d = decisions.find((x) => x.id === p.decision_id);
+  const d = p.decision_id == null ? null : decisions.find((x) => x.id === p.decision_id);
   return {
     title: `Report: ${String(p.category).replace(/[^\w -]/g, "")} — ${String(p.target_id).replace(/[^a-z0-9-]/g, "")}`.slice(0, 120),
-    body: `${MARK(p.id)}\n**Published report** (${md(p.date.slice(0, 10))}, UTC)\n\n- Target: ${md(p.target_kind)} \`${md(p.target_id, 64)}\`\n- Category: ${md(p.category)}\n- Decision: ${d ? `${md(DECISION[d.decision] || d.decision)} (record ${md(d.id)}, transparency/${d.date.slice(0, 4)}/${d.date.slice(5, 7)}.md)` : "-"}\n\n> ${md(p.text, 4000)}\n\nThe reporter's contact details are never published. Appeal: https://github.com/${REPO}/issues/new?template=appeal.yml`,
+    body: `${MARK(p.id)}\n**Published report** (${md(p.date.slice(0, 10))}, UTC)\n\n- Target: ${md(p.target_kind)} \`${md(p.target_id, 64)}\`\n- Category: ${md(p.category)}\n- Decision: ${d ? `${md(DECISION[d.decision] || d.decision)} (record ${md(d.id)}, transparency/${d.date.slice(0, 4)}/${d.date.slice(5, 7)}.md)` : "Not upheld (no sanction)"}\n\n> ${md(p.text, 4000)}\n\nThe reporter's contact details are never published. Appeal: https://github.com/${REPO}/issues/new?template=appeal.yml`,
   };
 }
 

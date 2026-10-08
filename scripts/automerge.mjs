@@ -62,7 +62,10 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
   // The check run for this exact commit: from the pull_request event, or
   // dispatched for a bot branch (only the repository can dispatch).
   const runs = await api(`/actions/runs?head_sha=${sha}&per_page=20`);
-  const check = (runs.workflow_runs || []).filter((r) => r.name === "check" && (r.event === "pull_request" || r.event === "workflow_dispatch")).sort((a, b) => b.run_number - a.run_number)[0];
+  // A pull_request run that GitHub holds for approval ("action_required", for
+  // pull requests opened by the workflow token) never ran: it is not a
+  // verdict, the dispatched run for the same commit is.
+  const check = (runs.workflow_runs || []).filter((r) => r.name === "check" && (r.event === "pull_request" || r.event === "workflow_dispatch") && r.conclusion !== "action_required").sort((a, b) => b.run_number - a.run_number)[0];
   if (!check || check.status !== "completed") return { wait: "the check workflow has not finished" };
   if (check.conclusion !== "success") reasons.push(`the check workflow ended with "${check.conclusion}"`);
   const files = await listFiles(api, pr.number);

@@ -189,11 +189,16 @@ ${sec(t(v.lang, "adm_recent"), recent.length ? `<div class="scroll"><table class
 }
 
 export function adminTarget(v, { s, kind, id, name, info, reports, audit, actions }) {
-  const act = (action, label, { reason = true, danger = false } = {}) => `<form class="act" method="post" action="/admin/target/${esc(kind)}/${esc(id)}/${action}">${csrfField(s)}${reason ? `<input name="reason" required maxlength="500" placeholder="${esc(t(v.lang, "adm_reason"))}">` : ""}<button class="pill ${danger ? "danger" : "ghost"}" type="submit" id="act-${action}">${esc(label)}</button></form>`;
+  // One form: the open items the decision is based on, the reason, and one
+  // button per action (formaction). Unticked items stay open.
+  const open = reports.filter((r) => r.state === "open");
+  const basis = open.length ? `<fieldset class="basis"><legend class="lbl">${esc(t(v.lang, "adm_basis"))}</legend>${open.map((r) => `<label class="check"><input type="checkbox" name="report_ids" value="${esc(r.id)}"> <span class="mono">${esc(r.id)}</span> ${esc(r.kind === "appeal" ? t(v.lang, "adm_appeal") : t(v.lang, "rep_cat_" + r.category))}</label>`).join("")}</fieldset>` : "";
+  const btn = (action, label, { danger = false } = {}) => `<button class="pill ${danger ? "danger" : "ghost"}" type="submit" id="act-${action}" formaction="/admin/target/${esc(kind)}/${esc(id)}/${action}">${esc(label)}</button>`;
+  const actForm = `<form class="form act" method="post" action="/admin/target/${esc(kind)}/${esc(id)}/dismiss">${csrfField(s)}${basis}<label class="check"><input type="checkbox" name="own_initiative" value="yes"> ${esc(t(v.lang, "adm_own"))}</label><p class="hint">${esc(t(v.lang, "adm_basis_hint"))}</p><input name="reason" required maxlength="500" placeholder="${esc(t(v.lang, "adm_reason"))}" aria-label="${esc(t(v.lang, "adm_reason"))}"><div class="btnrow">${actions.map(([a, label, o]) => btn(a, label, o)).join("")}</div></form>`;
   const body = `<p class="crumb"><a href="/admin/reports">${esc(t(v.lang, "adm_title"))}</a></p><h1 class="title">${esc(name || id)}</h1>${userBar(v.lang, s)}
 ${sec(t(v.lang, "c_details"), kv(info))}
 ${sec(t(v.lang, "adm_reports"), reports.length ? reports.map((r) => `<div class="report ${r.state}" id="${esc(r.id)}"><p><span class="badge">${esc(r.kind === "appeal" ? t(v.lang, "adm_appeal") : t(v.lang, "rep_cat_" + r.category))}</span> <span class="mono">${esc(when(r.created_at))}</span> <span class="mono">${esc(r.id)}</span> ${r.state === "open" ? "" : `<span class="badge">${esc(t(v.lang, "adm_closed"))}</span>`}${r.ticket ? ` <span class="mono">#${esc(r.ticket)}</span>` : ""}</p><p class="pre">${esc(r.description)}</p>${r.contact_email ? `<p class="mono">${esc(r.contact_email)}</p>` : ""}${r.context ? `<p class="mono hint">${esc(r.context)}</p>` : ""}${publishForm(v, s, kind, id, r)}</div>`).join("") : "-")}
-${sec(t(v.lang, "adm_actions"), actions.map(([a, label, o]) => act(a, label, o)).join(""))}
+${sec(t(v.lang, "adm_actions"), actForm)}
 ${sec(t(v.lang, "c_history"), audit.length ? `<div class="scroll"><table class="tbl stack"><tbody>${audit.map((r) => `<tr><td class="mono">${esc(when(r.at))}</td><td>${esc(t(v.lang, "act_" + r.action))}</td><td>${esc(reasonText(v.lang, r.reason))}</td><td class="mono">${esc((r.actor || "").slice(0, 12))}</td></tr>`).join("")}</tbody></table></div>` : "-")}`;
   return page(v, name || id, body);
 }

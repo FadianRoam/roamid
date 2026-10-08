@@ -19,12 +19,17 @@ export function redactReportText(s) {
 
 export const PUBLIC_DECISIONS = new Set(["warn", "suspend", "ban", "restore", "idp_disable", "idp_enable"]);
 
-export async function recordDecision(env, { kind, id, domain, decision, reason }) {
+// Dismiss and lift_limit are private (audit log only): a dismissed report
+// must not make the target appear in the public record.
+// `categories`: the categories of the reports the operator ticked as the
+// basis of the decision (empty: own initiative, category "none").
+export async function recordDecision(env, { kind, id, domain, decision, reason, categories = [] }) {
   if (!PUBLIC_DECISIONS.has(decision)) return null;
-  const cat = await env.DB.prepare("SELECT category, COUNT(*) AS n FROM reports WHERE target_kind = ? AND target_id = ? AND kind = 'report' AND created_at > ? GROUP BY category ORDER BY n DESC LIMIT 1")
-    .bind(kind, id, now() - 30 * 86400).first();
+  const count = new Map();
+  for (const c of categories) count.set(c, (count.get(c) || 0) + 1);
+  const cat = [...count].sort((a, b) => b[1] - a[1])[0];
   const r = await env.DB.prepare("INSERT INTO decisions (at, target_kind, target_id, domain, category, decision, reason) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(now(), kind, id, domain || null, cat ? cat.category : "none", decision, String(reason || "").replace(/[\r\n]+/g, " ").slice(0, 300)).run();
+    .bind(now(), kind, id, domain || null, cat ? cat[0] : "none", decision, String(reason || "").replace(/[\r\n]+/g, " ").slice(0, 300)).run();
   return r.meta && r.meta.last_row_id;
 }
 
@@ -38,7 +43,7 @@ export async function transparencyJson(env, url) {
     items = (results || []).map((r) => ({ id: r.id, date: iso(r.at), target_kind: r.target_kind, target_id: r.target_id, domain: r.domain, category: r.category, decision: r.decision, reason: r.reason, ...(r.withdrawn ? { withdrawn: r.withdrawn } : {}) }));
   } else {
     const { results } = await env.DB.prepare("SELECT id, at, decision_id, target_kind, target_id, category, text, withdrawn FROM publications WHERE id > ? ORDER BY id LIMIT 200").bind(after).all();
-    items = (results || []).map((r) => ({ id: r.id, date: iso(r.at), decision_id: r.decision_id, target_kind: r.target_kind, target_id: r.target_id, category: r.category, text: r.text, ...(r.withdrawn ? { withdrawn: r.withdrawn } : {}) }));
+    items = (results || []).map((r) => ({ id: r.id, date: iso(r.at), decision_id: r.decision_id, upheld: r.decision_id != null, target_kind: r.target_kind, target_id: r.target_id, category: r.category, text: r.text, ...(r.withdrawn ? { withdrawn: r.withdrawn } : {}) }));
   }
   const next = items.length === 200 ? items[items.length - 1].id : null;
   return json({ kind, items, next_after: next }, { cache: "public, max-age=60", cors: true });

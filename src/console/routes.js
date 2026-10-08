@@ -400,6 +400,7 @@ export async function handleReport(request, env) {
 // ---- operator ---------------------------------------------------------------------------------
 
 const APP_ACTIONS = { dismiss: "dismiss", warn: "warn", suspend: "suspend", ban: "ban", restore: "restore", lift_limit: "lift_limit", publish: "publish" };
+const UPHOLDING = new Set(["warn", "suspend", "ban", "idp_disable"]);
 const IDP_ACTIONS = { dismiss: "dismiss", idp_disable: "idp_disable", idp_enable: "idp_enable", publish: "publish" };
 
 export async function handleAdmin(request, env, p) {
@@ -471,8 +472,19 @@ export async function handleAdmin(request, env, p) {
   if (!valid || (!reason && action !== "dismiss" && action !== "publish")) return back(`/admin/target/${kind}/${id}`, null);
   const t0 = now();
   if (action === "publish") return publishReport(request, env, s, kind, id, f);
+  // The basis of the decision: the open items the operator ticked. Only those
+  // are closed; a report becomes "upheld" only when ticked for warn, suspend,
+  // ban or an identity provider disable. Without a ticked report such an
+  // action needs the explicit "own initiative" choice and upholds nothing.
+  const wanted = new Set(f.getAll("report_ids").map(String).slice(0, 200));
+  const { results: openItems } = await env.DB.prepare("SELECT id, kind, category FROM reports WHERE target_kind = ? AND target_id = ? AND state = 'open'").bind(kind, id).all();
+  const ticked = (openItems || []).filter((r) => wanted.has(r.id));
+  const tickedReports = ticked.filter((r) => r.kind === "report");
+  const upholds = UPHOLDING.has(action);
+  if (action === "dismiss" && !ticked.length) return back(`/admin/target/${kind}/${id}`, null);
+  if (upholds && !tickedReports.length && f.get("own_initiative") !== "yes") return back(`/admin/target/${kind}/${id}`, null);
   if (action === "dismiss") {
-    await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = 'dismissed', closed_by = ?, closed_at = ? WHERE target_kind = ? AND target_id = ? AND state = 'open'").bind(s.sub, t0, kind, id).run();
+    for (const r of ticked) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = CASE WHEN kind = 'report' THEN 'dismissed' ELSE outcome END, closed_by = ?, closed_at = ? WHERE id = ? AND state = 'open'").bind(s.sub, t0, r.id).run();
   } else if (kind === "app") {
     if (!row) return back(`/admin/target/${kind}/${id}`, null);
     if (action === "suspend" || action === "ban") {
@@ -485,8 +497,6 @@ export async function handleAdmin(request, env, p) {
     } else if (action === "lift_limit") {
       await env.DB.prepare("UPDATE apps SET limit_lifted = 1, updated_at = ? WHERE client_id = ?").bind(t0, id).run();
     }
-    // The open reports that led to a warning, suspension or ban are upheld.
-    if (["warn", "suspend", "ban"].includes(action)) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = CASE WHEN kind = 'report' THEN 'upheld' ELSE outcome END, closed_by = ?, closed_at = ? WHERE target_kind = 'app' AND target_id = ? AND state = 'open'").bind(s.sub, t0, id).run();
     if (action === "restore") await env.DB.prepare("UPDATE reports SET state = 'closed', closed_by = ?, closed_at = ? WHERE target_kind = 'app' AND target_id = ? AND state = 'open' AND kind = 'appeal'").bind(s.sub, t0, id).run();
   } else if (action === "idp_disable") {
     await env.DB.prepare("INSERT INTO idp_overrides (idp, disabled, reason, by_sub, at) VALUES (?, 1, ?, ?, ?) ON CONFLICT(idp) DO UPDATE SET disabled = 1, reason = excluded.reason, by_sub = excluded.by_sub, at = excluded.at").bind(id, reason, s.sub, t0).run();
@@ -497,7 +507,9 @@ export async function handleAdmin(request, env, p) {
   }
   await audit(env, s.sub, kind, id, action, reason);
   // The public record (transparency.json): no reporter data, no operator id.
-  await recordDecision(env, { kind, id, domain: row ? row.domain : null, decision: action, reason });
+  const decisionId = await recordDecision(env, { kind, id, domain: row ? row.domain : null, decision: action, reason, categories: upholds ? tickedReports.map((r) => r.category) : [] });
+  // The ticked reports are upheld by exactly this decision.
+  if (upholds) for (const r of tickedReports) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = 'upheld', decision_id = ?, closed_by = ?, closed_at = ? WHERE id = ? AND state = 'open'").bind(decisionId, s.sub, t0, r.id).run();
   return back(`/admin/target/${kind}/${id}`, null);
 }
 
@@ -508,10 +520,13 @@ async function publishReport(request, env, s, kind, id, f) {
   const rep = await env.DB.prepare("SELECT * FROM reports WHERE id = ? AND target_kind = ? AND target_id = ? AND kind = 'report' AND state = 'closed'").bind(String(f.get("report_id") || ""), kind, id).first();
   if (!rep) return back(`/admin/target/${kind}/${id}`, null);
   if (rep.outcome !== "upheld" && f.get("publish_dismissed") !== "yes") return back(`/admin/target/${kind}/${id}`, null);
-  const dec = await env.DB.prepare("SELECT id, decision FROM decisions WHERE target_kind = ? AND target_id = ? ORDER BY id DESC LIMIT 1").bind(kind, id).first();
-  const decisionText = dec ? dec.decision : (rep.outcome === "dismissed" ? "dismissed" : "none");
-  const body = rep.no_publish ? `Category: ${rep.category}. Decision: ${decisionText}. (The reporter asked not to publish the description.)` : redactReportText(String(f.get("text") || ""));
-  if (!body.trim()) return back(`/admin/target/${kind}/${id}`, null);
+  // Exactly the decision this report was upheld by; a dismissed report has none.
+  const dec = rep.outcome === "upheld" && rep.decision_id ? await env.DB.prepare("SELECT id, decision FROM decisions WHERE id = ? AND target_kind = ? AND target_id = ?").bind(rep.decision_id, kind, id).first() : null;
+  if (rep.outcome === "upheld" && !dec) return back(`/admin/target/${kind}/${id}`, null);
+  const lead = dec ? "" : "Not upheld. ";
+  const text = rep.no_publish ? `Category: ${rep.category}. Decision: ${dec ? dec.decision : "not upheld"}. (The reporter asked not to publish the description.)` : redactReportText(String(f.get("text") || "")).trim();
+  if (!text) return back(`/admin/target/${kind}/${id}`, null);
+  const body = (rep.no_publish ? text : lead + text).slice(0, 4000);
   await env.DB.prepare("INSERT INTO publications (at, report_id, decision_id, target_kind, target_id, category, text) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(report_id) DO NOTHING")
     .bind(now(), rep.id, dec ? dec.id : null, kind, id, rep.category, body).run();
   await audit(env, s.sub, kind, id, "published", null, rep.id);

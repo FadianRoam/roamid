@@ -83,7 +83,7 @@ export async function handleIssue(issue, { api, repo, log = console.log, appeal 
   // workflows: run the check for the branch explicitly.
   await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
   const steps = kind === "app" ? clientInstructions(entry) : idpInstructions(entry);
-  await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\n${kind === "app" ? "When the checks pass and the domain is proven, it is merged automatically and live about 5 minutes later." : "A maintainer reviews identity providers (docs/registry.md)."}`);
+  await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\n${kind === "app" ? "When the checks pass and the domain is proven, it is merged automatically (the automatic review runs twice an hour) and live about 5 minutes after the merge." : "A maintainer reviews identity providers (docs/registry.md)."}`);
   log(`#${issue.number}: ${open[0] ? "updated" : "opened"} PR #${pr.number} (${path})`);
   return { action: open[0] ? "updated" : "opened", pr: pr.number, path, entry };
 }
