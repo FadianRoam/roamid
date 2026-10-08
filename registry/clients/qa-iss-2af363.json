@@ -16,5 +16,6 @@
   ],
   "token_endpoint_auth_method": "none",
   "subject_type": "public",
-  "status": "active"
+  "status": "disabled",
+  "note": "Disabled. Test entry from the verification of the issue-form registration path on 2026-10-08."
 }
