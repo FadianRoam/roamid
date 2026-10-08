@@ -69,8 +69,8 @@ code,.mono{font-family:var(--mono);font-size:13px;letter-spacing:0;overflow-wrap
 .sub{margin-top:14px;max-width:31em;text-align:center;color:var(--ink-soft);font-size:16.1px;line-height:20px}
 html[lang^=zh] .sub{line-height:1.65}
 .hero-cta{margin-top:20px}
-.scene{position:relative;display:flex;flex-direction:column;align-items:center;width:100%;flex:0 1 auto;min-height:0;margin-top:26px;padding:34px 0 0}
-.band{position:absolute;top:0;bottom:56px;left:-16px;right:-16px;background:var(--band);overflow:hidden}
+.scene{position:relative;display:flex;flex-direction:column;align-items:center;width:100%;flex:1 1 auto;min-height:0;margin-top:26px;padding:34px 0 0}
+.band{position:absolute;top:0;bottom:0;left:-16px;right:-16px;background:var(--band);overflow:hidden}
 .band video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .band video{filter:brightness(.8)}}
 :root[data-theme=dark] .band video{filter:brightness(.8)}
@@ -80,18 +80,17 @@ html[lang^=zh] .sub{line-height:1.65}
 /* staged: a 1290x860 design stage scaled to the viewport (set by roamid.js) */
 html.staged .hero{min-height:0;height:100vh;overflow:hidden}
 html.staged .stage{position:absolute;top:0;left:50%;width:1290px;height:860px;padding:0;margin-left:-645px;display:block;transform-origin:50% 0;scale:var(--s)}
-html.staged .stage>.nav{position:absolute;top:22px;left:48px;width:1194px}
+html.staged .stage>.nav{position:absolute;top:22px;left:205px;width:880px}
 html.staged .display{position:absolute;top:128px;left:0;right:0;margin:0 auto;font-size:55.7px;line-height:61px}
 html.staged .sub{position:absolute;top:264px;left:0;right:0;margin:0 auto;max-width:560px}
 html.staged .hero-cta{position:absolute;top:330px;left:50%;margin:0 0 0 -120px;width:240px}
-html.staged .scene{position:absolute;top:452px;left:0;width:1290px;height:408px;margin:0;padding:0;display:block}
-html.staged .band{top:0;bottom:auto;height:262px;left:calc(-1 * var(--bleed));right:calc(-1 * var(--bleed))}
+html.staged .scene{position:absolute;top:452px;left:0;width:1290px;bottom:0;height:auto;margin:0;padding:0;display:block}
+html.staged .band{top:0;bottom:calc(-1 * var(--below,0px));height:auto;left:calc(-1 * var(--bleed));right:calc(-1 * var(--bleed))}
 html.staged .card{position:absolute;top:54px;left:345px;width:600px;max-height:350px}
 html.staged .hero[data-page=landing] .card{--dp:1px}
 html.staged .hero[data-page=picker] .display{top:108px}
 html.staged .hero[data-page=picker] .sub{top:244px}
-html.staged .hero[data-page=picker] .scene{top:330px;height:530px}
-html.staged .hero[data-page=picker] .band{height:250px}
+html.staged .hero[data-page=picker] .scene{top:330px}
 html.staged .hero[data-page=picker] .card{top:42px;max-height:470px}
 /* portrait phones: one screen, the card's list scrolls */
 @media (max-width:939px) and (orientation:portrait) and (min-height:600px){
@@ -135,7 +134,7 @@ html.staged .hero[data-page=picker] .card{top:42px;max-height:470px}
 
 /* ---- content pages ---- */
 .page{min-height:100svh;display:flex;flex-direction:column}
-.topbar{padding:14px 16px 0;max-width:1240px;width:100%;margin:0 auto}
+.topbar{padding:14px 16px 0;max-width:912px;width:100%;margin:0 auto}
 main.content{flex:1;width:100%;max-width:960px;margin:0 auto;padding:44px 16px 56px}
 main.content.narrow{max-width:640px}
 .title{font-weight:var(--w-bold);font-size:clamp(30px,6vw,40px);line-height:1.12;letter-spacing:var(--tr-display)}

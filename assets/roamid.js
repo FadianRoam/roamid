@@ -28,6 +28,7 @@
       if (on) {
         d.style.setProperty("--s", String(s));
         d.style.setProperty("--bleed", Math.max(0, (W / s - 1290) / 2) + "px");
+        d.style.setProperty("--below", Math.max(0, H / s - 860) + "px");
       }
     };
     fit();

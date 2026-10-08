@@ -2,14 +2,14 @@
 
 Shown on the RoamID error page together with a request ID, and sent to the application as `error_description=roamid:<code>` where the error is returned to it ([rp-integration.md](rp-integration.md) section 7). When reporting a problem, quote the code and the request ID.
 
-RoamID 错误页显示错误码与请求 ID;错误返回给应用时以 `error_description=roamid:<code>` 给出([rp-integration.md](zh-CN/rp-integration.md) 第 7 节)。报告问题时请提供错误码与请求 ID。
+RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error_description=roamid:<code>` 给出（[rp-integration.md](zh-CN/rp-integration.md) 第 7 节）。报告问题时请提供错误码与请求 ID。
 
 | Code / 错误码 | English | 中文 |
 |---|---|---|
-| `invalid_client` | The application is not registered with RoamID, or it has been disabled. | 此应用未在 RoamID 登记,或已被停用。 |
+| `invalid_client` | The application is not registered with RoamID, or it has been disabled. | 此应用未在 RoamID 登记，或已被停用。 |
 | `invalid_redirect_uri` | The return address does not match the application's registration. | 返回地址与应用登记的地址不一致。 |
 | `tx_expired` | This sign-in has expired or was already used. Start again from the application. | 此次登录已过期或已使用。请从应用重新开始。 |
-| `tx_browser` | This sign-in was started in a different browser or the cookie was blocked. Start again from the application in this browser. | 此次登录在另一个浏览器中开始,或 cookie 被阻止。请在当前浏览器中从应用重新开始。 |
+| `tx_browser` | This sign-in was started in a different browser or the cookie was blocked. Start again from the application in this browser. | 此次登录在另一个浏览器中开始，或 cookie 被阻止。请在当前浏览器中从应用重新开始。 |
 | `idp_unknown` | This identity provider is not in the registry. | 登记表中没有这个身份提供方。 |
 | `idp_disabled` | This identity provider is disabled. | 此身份提供方已停用。 |
 | `idp_not_allowed` | This application does not accept this identity provider. | 此应用不接受这个身份提供方。 |
@@ -30,4 +30,4 @@ RoamID 错误页显示错误码与请求 ID;错误返回给应用时以 `error_d
 
 Errors that an identity provider returns in its authorization response are counted as `upstream_<error>` and passed to the application as described in rp-integration.md.
 
-身份提供方在授权响应中返回的错误记为 `upstream_<error>`,按 rp-integration.md 所述转交应用。
+身份提供方在授权响应中返回的错误记为 `upstream_<error>`，按 rp-integration.md 所述转交应用。

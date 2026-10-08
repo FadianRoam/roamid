@@ -92,25 +92,25 @@ const T = {
   },
   zh: {
     tagline: "社区身份中转",
-    home_lead: "RoamID 把应用与社区身份提供方连接起来。应用以 OpenID Connect 接入 RoamID 一次,其用户即可使用公开登记表中的任一身份提供方登录。",
+    home_lead: "RoamID 把应用与社区身份提供方连接起来。应用以 OpenID Connect 接入 RoamID 一次，其用户即可使用公开登记表中的任一身份提供方登录。",
     home_how: "工作方式",
     home_steps: [
       "应用把用户送到 RoamID。",
-      "用户在列表中选择身份提供方,并在该处登录。",
-      "RoamID 校验登录结果,向应用返回含用户标识、姓名与邮箱的 ID 令牌。",
+      "用户在列表中选择身份提供方，并在该处登录。",
+      "RoamID 校验登录结果，向应用返回含用户标识、姓名与邮箱的 ID 令牌。",
     ],
     home_endpoints: "端点",
     home_registry: "身份提供方与应用通过拉取请求加入登记表。",
     nav_idps: "身份提供方", nav_idps_short: "身份提供方", nav_status: "状态", nav_demo: "演示", nav_docs: "文档", nav_source: "GitHub", menu: "菜单",
-    hero_l1: "一次接入,", hero_l2: "连通每个社区身份提供方",
-    hero_sub: "应用通过 OpenID Connect 接入 RoamID 一次,用户即可使用公开登记表中的任一身份提供方登录。",
+    hero_l1: "一次接入，", hero_l2: "连通每个社区身份提供方",
+    hero_sub: "应用通过 OpenID Connect 接入 RoamID 一次，用户即可使用公开登记表中的任一身份提供方登录。",
     hero_cta: "接入文档",
     sample_rp: "示例门户", sample_join: "你的身份提供方", sample_join_h: "通过拉取请求加入登记表",
     sample_label: "登录页示例",
     pick_h1: "选择你的", pick_h2: "身份提供方",
     pick_sub: "使用你已有的社区账号登录。RoamID 会把登录结果交给下方所示的服务。",
     pick_to: "正在登录", pick_continue: "继续", pick_cancel_short: "取消", pick_list: "身份提供方",
-    theme_next: "外观:{cur}。切换为{next}",
+    theme_next: "外观：{cur}。切换为{next}",
     theme: "外观", theme_system: "跟随系统", theme_light: "浅色", theme_dark: "深色", language: "语言",
     pick_title: "登录 {rp}",
     pick_lead: "选择你的身份提供方。",
@@ -119,7 +119,7 @@ const T = {
     pick_all: "全部身份提供方",
     pick_none: "没有匹配的身份提供方。",
     pick_empty: "此应用没有可用的身份提供方。",
-    pick_note: "{rp} 将收到一个标识,以及你的身份提供方提供的姓名与邮箱地址。",
+    pick_note: "{rp} 将收到一个标识，以及你的身份提供方提供的姓名与邮箱地址。",
     pick_cancel: "取消并返回 {rp}",
     status_up: "可用", status_degraded: "部分可用", status_down: "不可用", status_unknown: "未检查",
     idps_title: "身份提供方",
@@ -133,7 +133,7 @@ const T = {
     status_counts: "近 7 天登录", status_started: "开始", status_completed: "完成", status_failed: "失败",
     status_domains: "邮箱域名证明",
     status_version: "版本",
-    proof_verified: "已验证", proof_grace: "记录缺失,宽限期内", proof_lost: "已失去权威", proof_unverified: "未验证",
+    proof_verified: "已验证", proof_grace: "记录缺失，宽限期内", proof_lost: "已失去权威", proof_unverified: "未验证",
     err_title: "登录无法继续",
     err_code: "错误码", err_request: "请求 ID",
     err_back: "返回 {rp}",
@@ -141,7 +141,7 @@ const T = {
     out_title: "已退出 RoamID",
     out_lead: "RoamID 已在此浏览器中清除你选择的身份提供方。你在身份提供方处的会话不受影响。",
     demo_title: "演示应用",
-    demo_lead: "此页面是登记在 RoamID 登记表中的依赖方,类型为使用 PKCE 的公开客户端。它在浏览器中运行,显示 RoamID 返回的声明。",
+    demo_lead: "此页面是登记在 RoamID 登记表中的依赖方，类型为使用 PKCE 的公开客户端。它在浏览器中运行，显示 RoamID 返回的声明。",
     demo_signin: "使用 RoamID 登录",
     demo_signout: "退出",
     demo_again: "重新登录",
@@ -150,7 +150,7 @@ const T = {
     demo_working: "正在完成登录",
     demo_failed: "登录失败",
     demo_verified: "由提供方已证明的域名验证",
-    demo_asserted: "由提供方声明,未验证",
+    demo_asserted: "由提供方声明，未验证",
     ago: "{n}前",
   },
 };
@@ -181,10 +181,10 @@ const E = {
     server_error: "An internal error occurred.",
   },
   zh: {
-    invalid_client: "此应用未在 RoamID 登记,或已被停用。",
+    invalid_client: "此应用未在 RoamID 登记，或已被停用。",
     invalid_redirect_uri: "返回地址与应用登记的地址不一致。",
     tx_expired: "此次登录已过期或已使用。请从应用重新开始。",
-    tx_browser: "此次登录在另一个浏览器中开始,或 cookie 被阻止。请在当前浏览器中从应用重新开始。",
+    tx_browser: "此次登录在另一个浏览器中开始，或 cookie 被阻止。请在当前浏览器中从应用重新开始。",
     idp_unknown: "登记表中没有这个身份提供方。",
     idp_disabled: "此身份提供方已停用。",
     idp_not_allowed: "此应用不接受这个身份提供方。",
@@ -215,5 +215,11 @@ export function errorText(lang, code) {
 }
 
 export const ERROR_CODES = Object.keys(E.en);
+
+// For tests: every string of one language.
+export function allStrings(lang) {
+  const flat = (v) => (Array.isArray(v) ? v : [v]);
+  return [...Object.values(T[lang]).flatMap(flat), ...Object.values(E[lang])];
+}
 
 export const localName = (entry, lang) => (entry && entry.name && (entry.name[lang] || entry.name.en)) || "";
