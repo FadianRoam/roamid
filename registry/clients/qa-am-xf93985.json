@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schema/client.schema.json",
+  "client_id": "qa-am-xf93985",
+  "protocol": "oidc",
+  "name": {
+    "en": "G\u043e\u043egle Sign-in"
+  },
+  "homepage": "https://qa-am-f93985.fadianro.am/",
+  "domain": "qa-am-f93985.fadianro.am",
+  "contact": {
+    "github": "yunzheng2006",
+    "email": "support@yunzheng.space"
+  },
+  "redirect_uris": [
+    "https://qa-am-f93985.fadianro.am/cb"
+  ],
+  "token_endpoint_auth_method": "none",
+  "subject_type": "public",
+  "status": "active"
+}
