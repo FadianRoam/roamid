@@ -185,3 +185,4 @@ html.entering .card{transition:translate .9s cubic-bezier(.2,.8,.2,1) .65s,opaci
 html[lang^=zh] .display{font-size:clamp(28px,7.4vw,55.7px)}
 html.staged[lang^=zh] .display{font-size:55.7px}
 .hero[data-page=landing] .rows{flex:none;overflow:visible}
+.note{font-size:13px;line-height:1.4;color:var(--dim)}

@@ -113,6 +113,12 @@
         "pairwise"
       ]
     },
+    "note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "description": "Optional plain-text note shown with the entry on /idps and /apps, for example why it is disabled."
+    },
     "status": {
       "type": "string",
       "enum": [

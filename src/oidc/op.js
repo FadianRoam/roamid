@@ -3,7 +3,7 @@
 import { b64url, randomToken, sha256, sha256b64url, sha256hex, safeEqual } from "../lib/b64.js";
 import { sign, verify, decode } from "../lib/jwt.js";
 import { signingKeys } from "../lib/keys.js";
-import { json, html, redirect, cookie, getCookie, readForm, now, newNonce, corsPreflight } from "../lib/http.js";
+import { json, html, redirect, cookie, getCookie, readForm, now, newNonce, corsPreflight, cspPostingTo } from "../lib/http.js";
 import { allow } from "../lib/ratelimit.js";
 import { clientIp } from "../lib/edgesig.js";
 import { count } from "../lib/events.js";
@@ -77,7 +77,8 @@ function errorHtml(request, code, { status = 400, detail, back, backUrl, rpName,
   const rid = reqId(request);
   console.warn("[roamid] error", code, rid, detail || "");
   const b = back || (backUrl ? { url: backUrl } : null);
-  return html(errorPage({ ...v, path: "/", code, requestId: rid, detail, backUrl: b && b.url, backForm: b && b.form, rpName }), { status });
+  const headers = b && b.form ? { "Content-Security-Policy": cspPostingTo(b.form.action) } : {};
+  return html(errorPage({ ...v, path: "/", code, requestId: rid, detail, backUrl: b && b.url, backForm: b && b.form, rpName }), { status, headers });
 }
 
 function rpRedirect(env, redirectUri, params) {
@@ -310,7 +311,7 @@ export async function callback(request, env, idpId) {
 
 function deliverForm(request, tx, rpName, form) {
   const v = view(request, { uiLocales: tx.ui_locales });
-  return html(postPage({ ...v, path: "/", form, rpName }));
+  return html(postPage({ ...v, path: "/", form, rpName }), { headers: { "Content-Security-Policy": cspPostingTo(form.action) } });
 }
 
 // The sign-in succeeded at the identity provider: derive RoamID's subject

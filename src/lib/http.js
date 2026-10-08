@@ -58,6 +58,15 @@ export const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+// The CSP of a page that posts a SAML message to a service provider: the
+// form may also go to that one origin (a development service on
+// http://localhost is not covered by "https:").
+export function cspPostingTo(action) {
+  let origin;
+  try { origin = new URL(action).origin; } catch { return CSP; }
+  return CSP.replace("form-action 'self' https:", `form-action 'self' https: ${origin}`);
+}
+
 // HTML pages are personal (language, theme, remembered choice): never cached
 // by a shared cache.
 export function html(body, { status = 200, headers = {}, cookies = [] } = {}) {

@@ -28,6 +28,7 @@
     "client_secret_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "allowed_idps": { "type": "array", "minItems": 1, "maxItems": 200, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9-]{2,32}$" } },
     "subject_type": { "type": "string", "enum": ["public", "pairwise"] },
+    "note": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Optional plain-text note shown with the entry on /idps and /apps, for example why it is disabled." },
     "status": { "type": "string", "enum": ["active", "disabled"] }
   }
 }

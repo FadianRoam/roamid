@@ -110,3 +110,51 @@ ID 令牌用 ES256 签名，公钥在 `/jwks.json`，带 `kid`，有效期 1 小
 ## 9. 限额
 
 每个客户端 IP 地址：授权请求每分钟 60 次，令牌请求每分钟 120 次，UserInfo 每分钟 300 次。每个客户端：令牌请求每分钟 600 次。超出返回 HTTP 429。
+
+## 11. SAML 2.0 服务方
+
+只支持 SAML 2.0 的应用登记 `"protocol": "saml2"` 的条目（schema `schema/client-saml2.schema.json`），RoamID 即成为它的 SAML 身份提供方。
+
+```json
+{
+  "client_id": "example-wiki",
+  "protocol": "saml2",
+  "name": { "en": "Example Wiki", "zh": "示例维基" },
+  "homepage": "https://wiki.example.com/",
+  "contact": { "github": "example-dev", "email": "dev@example.com" },
+  "entity_id": "https://wiki.example.com/saml/metadata",
+  "acs_urls": ["https://wiki.example.com/saml/acs"],
+  "sign_cert": "<可选：签名 AuthnRequest 的证书>",
+  "subject_type": "public",
+  "status": "active"
+}
+```
+
+| 服务方处的设置 | 值 |
+|---|---|
+| IdP 元数据 | `https://id.fadianro.am/saml/idp/metadata.xml` |
+| IdP 实体 ID | `https://id.fadianro.am/saml/idp` |
+| SSO 地址 | `https://id.fadianro.am/saml/idp/sso`，HTTP-Redirect 或 HTTP-POST |
+| 响应绑定 | HTTP-POST 到 `acs_urls` 之一（逐字节比较） |
+| NameID | `urn:oasis:names:tc:SAML:2.0:nameid-format:persistent`，与 OIDC 的 `sub` 相同（public 或 pairwise；pairwise 的 sector 为 ACS 主机） |
+| 签名 | Response 与 Assertion 均签名，RSA-SHA256，排他规范化；断言不加密。 |
+| 有效期 | 5 分钟 |
+
+- **AuthnRequest 签名**：条目有 `sign_cert` 时，每个 AuthnRequest 必须用它签名：Redirect 绑定签名（`SigAlg` 为 RSA-SHA256 或 RSA-SHA512），或 HTTP-POST 的 enveloped 签名。未签名或签名不符的请求以 `RequestDenied` 拒绝。`SAMLRequest`、`RelayState`、`SigAlg`、`Signature` 各只能出现一次。
+- **IdP 发起**：`https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<值>` 完成登录后，把不带 `InResponseTo` 的 Response 发到第一个 ACS 地址。
+- **被动与强制**：`IsPassive="true"` 等同 OIDC 的 `prompt=none`（此前未选过身份提供方时返回 `NoPassive`）；`ForceAuthn="true"` 转交身份提供方。
+- **错误**以非成功状态的签名 Response 返回，RoamID 错误码在 `StatusMessage` 中（见 [errors.md](../errors.md)）。用户取消登录时为 `Responder`/`AuthnFailed`。
+
+属性（URI 名称格式；括号内为 `FriendlyName`）：
+
+| 属性 | 声明 |
+|---|---|
+| `urn:oid:0.9.2342.19200300.100.1.3`（`mail`） | `email` |
+| `urn:oid:2.16.840.1.113730.3.1.241`（`displayName`） | `name` |
+| `urn:oid:0.9.2342.19200300.100.1.1`（`uid`） | `preferred_username` |
+| `urn:roamid:claims:email_verified` | `email_verified`（`true`/`false`） |
+| `urn:roamid:claims:email_authority` | `email_authority` |
+| `urn:roamid:claims:idp`、`urn:roamid:claims:idp_name` | `idp`、`idp_name` |
+| `urn:roamid:claims:sub` | `sub`（与 NameID 相同） |
+
+第 6 节的账户关联规则同样适用：按 NameID 建立账户；只有 `email_authority` 为 `authoritative` 时才可按邮箱关联已有账户。

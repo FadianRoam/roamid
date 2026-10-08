@@ -214,3 +214,51 @@ claims = jwt.decode(token["id_token"], keys, claims_cls=CodeIDToken,
                     claims_params={"nonce": nonce, "client_id": "example-portal"})
 claims.validate()
 ```
+
+## 11. SAML 2.0 service providers
+
+An application that only speaks SAML 2.0 registers an entry with `"protocol": "saml2"` (schema `schema/client-saml2.schema.json`). RoamID is then its SAML identity provider.
+
+```json
+{
+  "client_id": "example-wiki",
+  "protocol": "saml2",
+  "name": { "en": "Example Wiki", "zh": "示例维基" },
+  "homepage": "https://wiki.example.com/",
+  "contact": { "github": "example-dev", "email": "dev@example.com" },
+  "entity_id": "https://wiki.example.com/saml/metadata",
+  "acs_urls": ["https://wiki.example.com/saml/acs"],
+  "sign_cert": "<optional: the certificate that signs your AuthnRequests>",
+  "subject_type": "public",
+  "status": "active"
+}
+```
+
+| Setting at the service provider | Value |
+|---|---|
+| IdP metadata | `https://id.fadianro.am/saml/idp/metadata.xml` |
+| IdP entity ID | `https://id.fadianro.am/saml/idp` |
+| SSO URL | `https://id.fadianro.am/saml/idp/sso`, HTTP-Redirect or HTTP-POST |
+| Response binding | HTTP-POST to one of `acs_urls` (compared byte for byte) |
+| NameID | `urn:oasis:names:tc:SAML:2.0:nameid-format:persistent`, equal to the OIDC `sub` (public or pairwise; the pairwise sector is the ACS host) |
+| Signature | The Response and the Assertion are signed, RSA-SHA256, exclusive canonicalization. Assertions are not encrypted. |
+| Validity | 5 minutes |
+
+- **AuthnRequest signatures.** When the entry has `sign_cert`, every AuthnRequest MUST be signed with it: the Redirect binding signature (`SigAlg` RSA-SHA256 or RSA-SHA512) or an enveloped signature for HTTP-POST. Unsigned or wrongly signed requests are refused with `RequestDenied`. Each of `SAMLRequest`, `RelayState`, `SigAlg` and `Signature` may appear once.
+- **IdP-initiated.** `https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<value>` signs the person in and posts an unsolicited Response (no `InResponseTo`) to the first ACS URL.
+- **Passive and forced.** `IsPassive="true"` behaves like OIDC `prompt=none` (status `NoPassive` when no identity provider was chosen before); `ForceAuthn="true"` is passed to the identity provider.
+- **Errors** come back as a signed Response with a non-success status; the RoamID error code is in `StatusMessage` (see [errors.md](errors.md)). A cancelled sign-in gives `Responder` / `AuthnFailed`.
+
+Attributes (URI name format; `FriendlyName` in brackets):
+
+| Attribute | Claim |
+|---|---|
+| `urn:oid:0.9.2342.19200300.100.1.3` (`mail`) | `email` |
+| `urn:oid:2.16.840.1.113730.3.1.241` (`displayName`) | `name` |
+| `urn:oid:0.9.2342.19200300.100.1.1` (`uid`) | `preferred_username` |
+| `urn:roamid:claims:email_verified` | `email_verified` (`true` / `false`) |
+| `urn:roamid:claims:email_authority` | `email_authority` |
+| `urn:roamid:claims:idp`, `urn:roamid:claims:idp_name` | `idp`, `idp_name` |
+| `urn:roamid:claims:sub` | `sub` (same value as the NameID) |
+
+The account linking rules of section 6 apply unchanged: link by NameID; use the email address to join an existing account only when `email_authority` is `authoritative`.

@@ -167,7 +167,7 @@ function healthBadge(lang, idp, h) {
 }
 
 export function idpsPage({ lang, theme, idps, health = {} }) {
-  const rows = idps.map((i) => `<tr><td><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span></td><td><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
+  const rows = idps.map((i) => `<tr><td><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span>${i.note ? `<br><span class="note">${esc(i.note)}</span>` : ""}</td><td><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
   const body = `<h1 class="title">${esc(t(lang, "idps_title"))}</h1><p class="lead">${esc(t(lang, "idps_lead"))}</p>
 <div class="section box"><div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
@@ -197,7 +197,10 @@ ${sec(t(lang, "status_registry"), kv([
 ${sec(t(lang, "nav_idps"), s.idp_health.length ? `<div class="scroll"><table class="tbl"><tbody>${s.idp_health.map((h) => `<tr><td class="mono">${esc(h.idp)}</td><td>${healthBadge(lang, { status: "active" }, h.state)}</td><td>${esc(h.checked_at || "")}</td><td class="mono">${esc(h.last_error || "")}</td></tr>`).join("")}</tbody></table></div>` : esc(t(lang, "status_none")))}
 ${sec(t(lang, "status_dropped"), r.dropped.length ? `<div class="scroll"><table class="tbl"><tbody>${r.dropped.map((d) => `<tr><td class="mono">${esc(d.kind)}/${esc(d.id)}</td><td>${d.errors.map(esc).join("<br>")}</td></tr>`).join("")}</tbody></table></div>` : esc(t(lang, "status_none")))}
 ${sec(t(lang, "status_domains"), s.domains.length ? `<div class="scroll"><table class="tbl"><tbody>${s.domains.map((p) => `<tr><td><code>${esc(p.domain)}</code></td><td class="mono">${esc(p.idp)}</td><td>${proof(p)}</td><td class="mono">${esc(p.last_error || "")}</td></tr>`).join("")}</tbody></table></div>` : esc(t(lang, "status_none")))}
-${sec(t(lang, "status_keys"), kv([[t(lang, "status_signing"), keys(s.keys.signing)], [t(lang, "status_client"), keys(s.keys.client)]]))}
+${s.warnings.length ? sec(t(lang, "status_warnings"), s.warnings.map((w) => `<p class="mono">${esc(w)}</p>`).join("")) : ""}
+${sec(t(lang, "status_keys"), kv([[t(lang, "status_signing"), keys(s.keys.signing)], [t(lang, "status_client"), keys(s.keys.client)],
+    [t(lang, "status_saml"), (s.keys.saml || []).map((k) => `<code>${esc(k.kid)}</code> ${esc(k.alg)}${k.created ? ` · ${esc(k.created)}` : ""} · ${esc(t(lang, "status_valid_until"))} ${esc((k.not_after || "").slice(0, 10))}`).join("<br>") || "-"]]))}
+${(s.saml_metadata || []).length ? sec(t(lang, "status_saml_meta"), `<div class="scroll"><table class="tbl"><tbody>${s.saml_metadata.map((m) => `<tr><td class="mono">${esc(m.idp)}</td><td>${esc(m.fetched_at || "-")}</td><td>${m.valid_until ? `${esc(t(lang, "status_valid_until"))} ${esc(m.valid_until)}` : ""}</td><td class="mono">${esc(m.last_error || "")}</td></tr>`).join("")}</tbody></table></div>`) : ""}
 ${sec(t(lang, "status_counts"), kv([[t(lang, "status_started"), `${s.counts.started}`], [t(lang, "status_completed"), `${s.counts.completed}`],
     [t(lang, "status_failed"), `${s.counts.failed}${Object.keys(s.counts.failures).length ? " · " + Object.entries(s.counts.failures).map(([k, v]) => `<code>${esc(k)}</code> ${v}`).join(", ") : ""}`]]))}
 ${sec(t(lang, "status_version"), kv([["RoamID", esc(s.version)], ["Deployment", `<code>${esc(s.deployment || "-")}</code>`]]))}

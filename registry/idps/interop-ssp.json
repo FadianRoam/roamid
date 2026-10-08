@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schema/idp-saml2.schema.json",
+  "id": "interop-ssp",
+  "protocol": "saml2",
+  "name": {
+    "en": "Interoperability test: SimpleSAMLphp",
+    "zh": "互通测试：SimpleSAMLphp"
+  },
+  "homepage": "https://simplesamlphp.org/",
+  "contact": {
+    "github": "yunzheng2006",
+    "email": "support@yunzheng.space"
+  },
+  "entity_id": "https://localhost:8443/simplesaml/saml2/idp/metadata.php",
+  "sso_url": "https://localhost:8443/simplesaml/saml2/idp/SSOService.php",
+  "certs": [
+    "MIIDLzCCAhegAwIBAgIUPFTQBKj64pc+hC+dakOOZnkcoKMwDQYJKoZIhvcNAQELBQAwJzElMCMGA1UEAwwcUm9hbUlEIGludGVyb3AgU2ltcGxlU0FNTHBocDAeFw0yNjEwMDgxMTI1MjZaFw0yODEwMDcxMTI1MjZaMCcxJTAjBgNVBAMMHFJvYW1JRCBpbnRlcm9wIFNpbXBsZVNBTUxwaHAwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC7+w90rz++rXT6EfwxB/ryZ2QOu1MP9xkGZmb8QDs+Q1Q9YPlD/bHIZTtuA7lZMw+kRpnDnJCAVcdrmYnrfEpQf0r5HIxVzptXZIbsjP1RZmG8cQsv0EEEPp+rdb/7kqYlVCzJYxx458hmLZ/g3b6L5nnlYlygjix/0r8mhMqnjZ34tyVi378ItnQjAdzEgSogdm5iigVuO/M1kLSgjLVZMUAMFKkFql7RIfy1r0CzNGgy+OD/HA8nf3+liMDL4eBjA8dZAt2IbqTnycTQ49u8pLFQ4D5Uvxmj0/SdCHXkqwGD9Fr3dpDGzuidpyRLqImzFvmXaYeTMG5me63pHK2/AgMBAAGjUzBRMB0GA1UdDgQWBBR88aPrihsbb2H6omMJVGWR3jZZIjAfBgNVHSMEGDAWgBR88aPrihsbb2H6omMJVGWR3jZZIjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCjLNAMJEIMBuKMvV6TaWhXwOqg+BKSJsVnk54iy1TKzb4c5wtpT8HWpBjfxBdN6gXVPkr+TXwSWopqEAhqU/hbEk1jkFEoICMV/iiW7Mf0P81qskeIj+crNCZSIaf2XYPckLTKT3Q5EWawwX1kHKMN/u4DjF0HyqJCMX9smdnqJY19XvrNMa5kyDUWZaqTKdA9Km89jduRaeKG9dsDaVqpbVB/1TKCx7DIss3aNetiCV/br6xrQoZM5qcRMNP0uVOlWPcGa9oo2efotONqzXCzrMMjaPemqrDBN1wuUNIjjkT5RsegPUI6dggA9JPDxSJ3HlBU4ElQu3fTP5nMEIkx"
+  ],
+  "sub_source": "nameid",
+  "email_attribute_verified": false,
+  "note": "Operator test entry: a SimpleSAMLphp container on the tester's own machine, used to test SAML interoperability.",
+  "status": "active"
+}

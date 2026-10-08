@@ -28,7 +28,7 @@ function view(request) {
 }
 
 function publicIdp(i, health) {
-  return { id: i.id, protocol: i.protocol, name: i.name, ...(i.protocol === "saml2" ? { entity_id: i.entity_id || null, metadata_url: i.metadata_url || null } : { issuer: i.issuer }), homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, health: health[i.id] || "unknown" };
+  return { id: i.id, protocol: i.protocol, name: i.name, ...(i.protocol === "saml2" ? { entity_id: i.entity_id || null, metadata_url: i.metadata_url || null } : { issuer: i.issuer }), homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, ...(i.note ? { note: i.note } : {}), health: health[i.id] || "unknown" };
 }
 
 async function statusData(env) {
@@ -57,6 +57,8 @@ async function statusData(env) {
     if (idp.protocol !== "saml2" || !idp.certs) continue;
     for (const c of idp.certs) { try { const i = certInfo(c); if (i.notAfter - t < 30 * 86400) warnings.push(`${idp.id}: signing certificate expires ${iso(i.notAfter)}`); } catch { warnings.push(`${idp.id}: a certificate cannot be read`); } }
   }
+  let samlMeta = [];
+  try { samlMeta = (await env.DB.prepare("SELECT idp, fetched_at, checked_at, valid_until, last_error FROM saml_metadata ORDER BY idp").all()).results || []; } catch { /* table missing in old databases */ }
   return {
     version: VERSION,
     deployment: env.CF_VERSION_METADATA ? env.CF_VERSION_METADATA.id : null,
@@ -70,6 +72,7 @@ async function statusData(env) {
     domains: (proofs || []).map((p) => ({ domain: p.domain, idp: p.idp, state: proofState(p, t), verified_at: iso(p.verified_at), checked_at: iso(p.checked_at), failing_since: iso(p.failing_since), last_error: p.last_error })),
     keys,
     warnings,
+    saml_metadata: samlMeta.map((m) => ({ idp: m.idp, fetched_at: iso(m.fetched_at), checked_at: iso(m.checked_at), valid_until: iso(m.valid_until), last_error: m.last_error })),
     counts: await summary(env, 7),
   };
 }
