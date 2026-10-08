@@ -8,6 +8,6 @@
     "category": "phishing",
     "decision": "suspend",
     "reason": "QA test: imitation of a login page (test entry)",
-    "withdrawn": "test entry from the QA verification, not a real decision"
+    "withdrawn": "test entry from the QA verification on 2026-10-08; not a real decision"
   }
 ]
