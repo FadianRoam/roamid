@@ -167,9 +167,10 @@ function healthBadge(lang, idp, h) {
 }
 
 export function idpsPage({ lang, theme, idps, health = {} }) {
-  const rows = idps.map((i) => `<tr><td><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span>${i.note ? `<br><span class="note">${esc(i.note)}</span>` : ""}</td><td><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
+  const L = (k) => ` data-label="${esc(t(lang, k))}"`;
+  const rows = idps.map((i) => `<tr><td${L("col_name")}><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span>${i.note ? `<br><span class="note">${esc(i.note)}</span>` : ""}</td><td${L("col_issuer")}><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td${L("col_domains")}>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td${L("col_status")}>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
   const body = `<h1 class="title">${esc(t(lang, "idps_title"))}</h1><p class="lead">${esc(t(lang, "idps_lead"))}</p>
-<div class="section box"><div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+<div class="section box"><div class="scroll"><table class="tbl stack"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
   return contentPage({ lang, theme, path: "/idps", active: "idps", title: t(lang, "idps_title"), body });
 }
