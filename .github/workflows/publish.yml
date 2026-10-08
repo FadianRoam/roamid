@@ -1,10 +1,17 @@
 name: publish
 
-# Every push to main: run the same checks, build registry.json (with the
+# Every change to main: run the same checks, build registry.json (with the
 # commit it was built from) and publish it to GitHub Pages. RoamID fetches it
 # from there every 5 minutes. Uses only the default GITHUB_TOKEN.
+# Triggers: a push to main, a merged pull request (main is changed only by
+# pull requests; this builds main, never the pull request's code), and a
+# dispatch (the automatic review dispatches it after a merge and whenever the
+# published commit is behind main).
 on:
   push:
+    branches: [main]
+  pull_request_target:
+    types: [closed]
     branches: [main]
   workflow_dispatch:
 
@@ -19,11 +26,13 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: main
           fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
