@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Dependencies
+        run: npm ci --ignore-scripts
       - name: Tests
         run: |
           node scripts/build-assets.mjs --check
