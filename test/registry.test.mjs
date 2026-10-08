@@ -69,3 +69,10 @@ test("identifiers are permanent: delete and rename are refused", () => {
   const ren = checkImmutable(base, { idps: ["one", "deux"], clients: ["application"] });
   assert.equal(ren.length, 2);
 });
+
+test("docs/errors.md lists every error code", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { ERROR_CODES } = await import("../src/ui/i18n.js");
+  const md = readFileSync(new URL("../docs/errors.md", import.meta.url), "utf8");
+  for (const c of ERROR_CODES) assert.ok(md.includes(`\`${c}\``), c);
+});
