@@ -1,0 +1,12 @@
+{
+  "$schema": "../../schema/client-saml2.schema.json",
+  "client_id": "roamid-demo-saml",
+  "protocol": "saml2",
+  "name": { "en": "RoamID SAML demo", "zh": "RoamID SAML 演示" },
+  "homepage": "https://id.fadianro.am/demo/saml",
+  "contact": { "github": "yunzheng2006", "email": "support@yunzheng.space" },
+  "entity_id": "https://id.fadianro.am/demo/saml",
+  "acs_urls": ["https://id.fadianro.am/demo/saml/acs"],
+  "subject_type": "public",
+  "status": "active"
+}
