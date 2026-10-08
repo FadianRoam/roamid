@@ -17,6 +17,6 @@
   ],
   "sign_cert": "MIICnTCCAYUCBgGhG06ChjANBgkqhkiG9w0BAQsFADASMRAwDgYDVQQDDAdpbnRlcm9wMB4XDTI2MTAwODExMzYzMloXDTM2MTAwODExMzgxMlowEjEQMA4GA1UEAwwHaW50ZXJvcDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMZQywqI+ni/G4Ivc96NaLzg3Vc2V4CMFzxPNuZVcS6EPVWU6YJ5Ax1RpMnavNEvhtLmbQs/36PJ6ggSFtkLZPVXs90AFRP8LTLtevvA/Q28ve09DFuFEp/WZqh/pzt2hG8vNIDH2YDEdbJ8xkGLFs7bsaWZkW0M/dP0gtqnuvFNzmtTGZuG6HGE4gGpPPjOh8mvE+vR48bIl9ARsi+hZJ2SoA8jk+igSs7q8mo1+nzz0RqCEj/sv3A2S87fsFQFGJQdxg5sz7YMm2AScyV2GmX0TGuhcONmMJE4Qxed5JtqrgUsmyWI+CVBxjSTOlX8hw5Z/Z0bPpskKUdV59J1920CAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAAIQCpSuk1swDg4coUctoMe0ON1ncm00SRjEYWVfzs4UnmRtfaNNHINfquvSB8zcf+3IC4E6ZP1hQyEwuPOlqldRHK+ID5zfRH3EIl5Z4HZcAVEjrbczuziUZEmOi3M5Ovbc0pFoceAHNnNlrTza52BVEsUFa2VXlh5xwaY5My8QYK08LWW1vT/Ery1qIkVMWOr7y+krm/JJtEjOzbIi2Enmq2HpXUzP3hVH6x2F6epphAqQP3LUc1WtABX/XUFRhSABGjsafMbNed2SBEvxd3L2vIyvS1b32YY/d5hcrl1DFJ1sDzL6BxE4zPOgBLdzZVyxD7FzKQKrWg4ONR/UBxw==",
   "subject_type": "public",
-  "note": "Operator test entry: a Keycloak container on the tester's own machine as SAML service provider, used to test SAML interoperability.",
-  "status": "active"
+  "note": "Disabled. Operator test entry used on 2026-10-08 to test SAML interoperability with a Keycloak 26.0 container as SAML service provider on the tester's own machine.",
+  "status": "disabled"
 }

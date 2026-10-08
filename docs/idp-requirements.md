@@ -120,4 +120,6 @@ An entry with `"protocol": "saml2"` describes a SAML 2.0 identity provider (for 
 | XML | No DTD, no entity declarations. Documents larger than 512 KiB are refused. |
 | Metadata | `metadata_url` (https) is loaded at least every 6 hours. When a load fails the last good copy is used, but never after its `validUntil`. Without `metadata_url`, the entry gives `entity_id`, `sso_url` and `certs`. |
 
+Tested implementations (2026-10-08): SimpleSAMLphp 1.19 and Keycloak 26.0 as identity providers, with signed AuthnRequests verified by them, signed Responses and Assertions, and encrypted assertions. Both encrypt with AES-128-CBC when a certificate is used for key transport, so with them encryption works only while the Response is signed (their default).
+
 Health of a SAML provider: the metadata loads (or is inline) and one signing certificate is valid now. `/status` warns 30 days before a signing certificate expires.

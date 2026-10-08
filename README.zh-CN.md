@@ -55,7 +55,10 @@ RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP�
 | `/callback/<idp-id>` | 在各身份提供方处登记的回调地址 |
 | `/idps`、`/idps.json` | 已登记的身份提供方及其状态 |
 | `/status`、`/status.json` | 登记表提交、域名证明、提供方健康、密钥、每日计数 |
+| `/saml/idp/metadata.xml`、`/saml/idp/sso` | 面向 SAML 服务方的 SAML 2.0 身份提供方 |
+| `/saml/sp/metadata.xml`、`/saml/acs/<idp-id>` | 面向 SAML 身份提供方的 SAML 2.0 服务方 |
 | `/demo` | 演示应用（使用 PKCE 的公开客户端） |
+| `/demo/saml` | SAML 服务方演示 |
 | `POST /admin/sync` | 运营方立即同步登记表（Bearer 令牌） |
 
 ## 开发

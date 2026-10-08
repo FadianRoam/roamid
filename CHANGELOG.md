@@ -4,6 +4,8 @@
 
 - SAML 2.0 HTTP-Redirect binding: `SAMLRequest`, `SAMLResponse`, `RelayState`, `SigAlg` and `Signature` may appear once each (compared by decoded name); the signed octets and the processed values come from the same occurrence. HTTP-POST fields may appear once each. A signed HTTP-POST `AuthnRequest` is read from the verified copy.
 - SAML 2.0 encrypted assertions: AES-GCM; AES-CBC only inside a signed `Response`. Every decryption or parsing failure of an encrypted assertion gives the single error `saml_invalid_response`. Service provider metadata lists AES-GCM only.
+- SAML 2.0 in both directions: SAML identity providers upstream (`/saml/acs/<id>`) and RoamID as SAML identity provider for SAML-only applications (`/saml/idp/sso`), with metadata refresh, health, `/status` entries and documentation. Tested with SimpleSAMLphp 1.19 and Keycloak 26.0.
+- Registry entries may carry a `note`.
 - XML signatures: exclusive canonicalization without comments only; transforms limited to enveloped-signature and exclusive canonicalization.
 
 ## 1.0.0 (2026-10-08)

@@ -55,7 +55,10 @@ The interface described in these documents is version 1.
 | `/callback/<idp-id>` | Redirect URI registered at each identity provider |
 | `/idps`, `/idps.json` | Registered identity providers and their status |
 | `/status`, `/status.json` | Registry commit, domain proofs, provider health, keys, daily counts |
+| `/saml/idp/metadata.xml`, `/saml/idp/sso` | SAML 2.0 identity provider for SAML service providers |
+| `/saml/sp/metadata.xml`, `/saml/acs/<idp-id>` | SAML 2.0 service provider of SAML identity providers |
 | `/demo` | Demo application (public client with PKCE) |
+| `/demo/saml` | Demo SAML service provider |
 | `POST /admin/sync` | Immediate registry sync for the operator (bearer token) |
 
 ## Repository layout

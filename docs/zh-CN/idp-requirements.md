@@ -102,4 +102,6 @@ node scripts/check.mjs --base origin/main --probe
 | XML | 不允许 DTD 与实体声明；大于 512 KiB 的文档被拒绝。 |
 | 元数据 | `metadata_url`（https）至少每 6 小时载入一次；载入失败时使用最后一份有效副本，但不超过其 `validUntil`。不给 `metadata_url` 时，条目写 `entity_id`、`sso_url`、`certs`。 |
 
+已测试的实现（2026-10-08）：SimpleSAMLphp 1.19 与 Keycloak 26.0 作为身份提供方，包括它们对签名 AuthnRequest 的校验、签名的 Response 与 Assertion、加密断言。两者用证书传输密钥时都以 AES-128-CBC 加密，因此只有在 Response 签名（其默认设置）时才能使用加密。
+
 SAML 提供方的健康状态：元数据可载入（或为内联），且当前有一张有效的签名证书。签名证书到期前 30 天，`/status` 显示警告。

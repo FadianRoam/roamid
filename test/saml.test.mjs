@@ -270,6 +270,8 @@ test("SAML SP: signed Redirect request accepted; IdP-initiated; cancel posts Aut
   assert.equal(idpInit.status, 303);
   const tx = new URL(BASE + idpInit.headers.get("Location")).searchParams.get("tx");
   const cancel = await h.request(`/saml/idp/cancel?tx=${tx}`);
+  // The page may post to the service provider's ACS origin (also http://localhost in development).
+  assert.match(cancel.headers.get("Content-Security-Policy"), /form-action 'self' https: https:\/\/sp\.example\.test;/);
   const f = readPostPage(await cancel.text());
   assert.match(Buffer.from(f.response, "base64").toString(), /AuthnFailed/);
 });
