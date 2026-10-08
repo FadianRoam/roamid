@@ -155,21 +155,30 @@ export async function run({ api, repo, only, dry, base, review, log = console.lo
   return merged;
 }
 
-// For bot pull requests (opened with the workflow token, which starts no
-// pull_request workflow): dispatch "check" on the branch, wait until its
-// check run for the head commit has finished, then dispatch this workflow for
-// the pull request. The required status check "check" is then on the head.
-export async function checkThenMerge(api, { branch, sha, pr, wait = 300, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = console.log }) {
-  await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
+// For bot pull requests (opened with the workflow token): GitHub creates
+// their pull_request "check" run but holds it ("action_required"). The
+// ruleset counts only that run, so the bot releases it, for its own branch
+// and the exact head commit it just pushed (a workflow-run approval, not a
+// pull request review), waits for the result, then starts the automatic
+// review for the pull request. Without a held run within a minute, "check"
+// is dispatched on the branch instead (the schedule then completes it).
+const BOT_BRANCH = /^(issue-\d+|transparency\/\d{4}-\d{2}-\d{2})$/;
+export async function checkThenMerge(api, { branch, sha, pr, repo = process.env.GITHUB_REPOSITORY || "FadianRoam/roamid", wait = 420, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = console.log }) {
+  if (!BOT_BRANCH.test(branch) || !/^[0-9a-f]{40}$/.test(sha)) throw new Error(`checkThenMerge: not a bot branch or commit (${branch})`);
+  let released = false, dispatched = false;
   for (let t = 0; t < wait; t += 10) {
     if (t) await sleep(10000);
-    const runs = await api(`/commits/${sha}/check-runs?check_name=check&per_page=10`);
-    const done = (runs.check_runs || []).filter((c) => c.status === "completed");
-    if (done.length) {
-      log(`check on ${sha.slice(0, 7)}: ${done[0].conclusion}`);
-      if (done[0].conclusion === "success" && pr) await api("/actions/workflows/automerge.yml/dispatches", { method: "POST", body: { ref: "main", inputs: { pr: String(pr) } } });
-      return done[0].conclusion;
+    const runs = ((await api(`/actions/runs?head_sha=${sha}&event=pull_request&per_page=20`)).workflow_runs || [])
+      .filter((r) => r.name === "check" && r.path === ".github/workflows/check.yml" && r.event === "pull_request" && r.head_branch === branch && r.head_sha === sha && r.head_repository && r.head_repository.full_name === repo);
+    const held = runs.find((r) => r.conclusion === "action_required");
+    if (held && !released) { await api(`/actions/runs/${held.id}/approve`, { method: "POST" }); released = true; log(`released the held check run ${held.id} for ${sha.slice(0, 7)}`); continue; }
+    const done = runs.filter((r) => r.status === "completed" && r.conclusion !== "action_required").sort((x, y) => y.run_number - x.run_number)[0];
+    if (done) {
+      log(`check on ${sha.slice(0, 7)}: ${done.conclusion}`);
+      if (done.conclusion === "success" && pr) await api("/actions/workflows/automerge.yml/dispatches", { method: "POST", body: { ref: "main", inputs: { pr: String(pr) } } });
+      return done.conclusion;
     }
+    if (!runs.length && t >= 60 && !dispatched) { await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } }); dispatched = true; log(`no pull_request run for ${sha.slice(0, 7)}: dispatched check`); }
   }
   log(`check on ${sha.slice(0, 7)}: not finished; the scheduled automatic review picks the pull request up`);
   return null;

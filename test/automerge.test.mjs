@@ -118,7 +118,7 @@ test("transparency sync: values are escaped, no mentions, no markup; issues once
   const iss = issueFor({ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "@everyone see <img src=x>", decision_id: 1 }, [{ id: 1, date: "2026-10-08T12:00:00Z", decision: "suspend" }]);
   assert.doesNotMatch(iss.body, /@everyone|<img/);
   const calls = [];
-  const H = "h".repeat(40);
+  const H = "d".repeat(40);
   const api = async (path, opt = {}) => {
     calls.push([opt.method || "GET", path, opt.body]);
     if (path === "/git/ref/heads/main") return { object: { sha: "m".repeat(40) } };
@@ -128,18 +128,18 @@ test("transparency sync: values are escaped, no mentions, no markup; issues once
     if (path === "/issues") return { number: 10 };
     if (path.startsWith("/pulls?")) return [];
     if (path === "/pulls") return { number: 77 };
-    if (path.startsWith(`/commits/${H}/check-runs`)) return { check_runs: [{ status: "completed", conclusion: "success" }] };
+    if (path.startsWith(`/actions/runs?head_sha=${H}&event=pull_request`)) return { workflow_runs: [{ id: 9, name: "check", path: ".github/workflows/check.yml", event: "pull_request", head_repository: { full_name: "FadianRoam/roamid" }, head_branch: "transparency/2026-10-08", head_sha: H, run_number: 2, status: "completed", conclusion: calls.some(([m, p]) => p === "/actions/runs/9/approve") ? "success" : "action_required" }] };
     return {};
   };
   const fetchFn = async (u) => Response.json(String(u).includes("publications") ? { items: [{ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "t" }, { id: 6, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-y", category: "fraud", text: "u" }], next_after: null } : { items: [{ id: 1, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", decision: "suspend", reason: "r" }], next_after: null });
-  await sync({ api, fetchFn, log() {}, today: "2026-10-08" });
+  await sync({ api, fetchFn, log() {}, today: "2026-10-08", sleep: async () => {} });
   assert.equal(calls.filter(([m, p]) => m === "POST" && p === "/issues").length, 1, "publication 5 has an issue already; only 6 is opened");
   const puts = calls.filter(([m, p]) => m === "PUT" && p.startsWith("/contents/"));
   assert.ok(puts.length && puts.every(([, , b]) => b.branch === "transparency/2026-10-08"), "never committed to main; always to the transparency/<date> branch");
   assert.ok(puts.some(([, p]) => p === "/contents/transparency/2026/10.md"));
   assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/git/refs" && b.ref === "refs/heads/transparency/2026-10-08"));
   assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/pulls" && b.base === "main" && b.head === "transparency/2026-10-08" && b.title === "update"));
-  assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/check.yml/dispatches" && b.ref === "transparency/2026-10-08"));
+  assert.ok(calls.some(([m, p]) => m === "POST" && p === "/actions/runs/9/approve"));
   assert.ok(calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches" && b.inputs.pr === "77"));
 });
 
@@ -205,4 +205,33 @@ test("automerge: dispatches publish when the published registry is behind main",
   calls.length = 0;
   await run({ api: spy, repo: REPO, base: BASE, review: okReview, log() {}, published: async () => "b".repeat(40) });
   assert.ok(!calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/publish.yml/dispatches"), "up to date: nothing");
+});
+
+test("checkThenMerge releases only the check run for its own branch, exact head commit and this repository", async () => {
+  const { checkThenMerge } = await import("../scripts/automerge.mjs");
+  const H = "d".repeat(40);
+  const base = { name: "check", path: ".github/workflows/check.yml", event: "pull_request", head_branch: "issue-3", head_sha: H, head_repository: { full_name: REPO }, run_number: 1, status: "completed", conclusion: "action_required" };
+  const bad = [
+    { ...base, id: 1, head_sha: "x".repeat(40) },
+    { ...base, id: 2, head_branch: "attacker" },
+    { ...base, id: 3, head_repository: { full_name: "mallory/roamid" } },
+    { ...base, id: 4, name: "evil", path: ".github/workflows/evil.yml" },
+  ];
+  let calls = [];
+  const apiFor = (runs) => async (path, opt = {}) => { calls.push([opt.method || "GET", path]); return path.startsWith("/actions/runs?") ? { workflow_runs: runs } : {}; };
+  assert.equal(await checkThenMerge(apiFor(bad), { branch: "issue-3", sha: H, pr: 5, repo: REPO, wait: 90, sleep: async () => {}, log() {} }), null);
+  assert.ok(!calls.some(([, p]) => /approve/.test(p)), "no other branch, commit, fork or workflow is released");
+  assert.ok(calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/check.yml/dispatches"), "fallback dispatch");
+  assert.ok(!calls.some(([, p]) => /\/reviews|automerge\.yml/.test(p)), "never a pull request review; no merge without a check");
+  // A human's branch or a non-bot branch name is refused outright.
+  for (const branch of ["feature", "main", "issue-3x", "transparency/latest"]) {
+    await assert.rejects(checkThenMerge(apiFor([]), { branch, sha: H, pr: 5, repo: REPO, sleep: async () => {}, log() {} }), /not a bot branch/);
+  }
+  // The matching run is released once, then its success starts the automatic review.
+  calls = [];
+  let state = "action_required";
+  const ok = async (path, opt = {}) => { calls.push([opt.method || "GET", path]); if (/\/approve$/.test(path)) state = "success"; return path.startsWith("/actions/runs?") ? { workflow_runs: [...bad, { ...base, id: 7, conclusion: state }] } : {}; };
+  assert.equal(await checkThenMerge(ok, { branch: "issue-3", sha: H, pr: 5, repo: REPO, sleep: async () => {}, log() {} }), "success");
+  assert.deepEqual(calls.filter(([, p]) => /approve/.test(p)).map(([, p]) => p), ["/actions/runs/7/approve"]);
+  assert.ok(calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches"));
 });
