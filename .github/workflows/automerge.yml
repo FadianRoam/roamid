@@ -5,11 +5,7 @@ name: automerge
 # the base repository with the base branch checked out; it reads pull
 # requests through the API as data and never checks out or runs their code.
 on:
-  workflow_run:
-    workflows: [check]
-    types: [completed]
-  schedule:
-    - cron: "17,47 * * * *"
+  # Automatic triggers are off until the review fixes are live.
   workflow_dispatch:
     inputs:
       pr:
