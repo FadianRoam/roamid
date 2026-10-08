@@ -1,0 +1,14 @@
+{
+  "$schema": "../../schema/idp.schema.json",
+  "id": "yunzheng",
+  "protocol": "oidc",
+  "name": { "en": "YunZheng Auth" },
+  "issuer": "https://auth.yunzheng.space/realms/lab",
+  "homepage": "https://yunzheng.space/",
+  "contact": { "github": "yunzheng2006", "email": "support@yunzheng.space" },
+  "client_id": "roamid",
+  "client_auth": "client_secret_basic",
+  "scopes": ["openid", "email", "profile"],
+  "email_domains": ["lab.yunzheng.space", "yunzheng.space"],
+  "status": "active"
+}
