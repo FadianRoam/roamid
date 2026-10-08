@@ -21,7 +21,7 @@ function userBar(lang, s) {
 <form method="post" action="/console/logout">${csrfField(s)}<button class="linkbtn" type="submit">${esc(t(lang, "c_sign_out"))}</button></form></div>`;
 }
 
-const page = (v, title, body, active = "") => contentPage({ ...v, active, title, body });
+const page = (v, title, body, active = "", head = "") => contentPage({ ...v, active, title, body, head });
 
 // ---- console ------------------------------------------------------------------
 
@@ -106,7 +106,7 @@ ${role === "owner" && coOwners.length ? `<form class="inline" method="post" acti
   const auditBox = audit.length ? `<div class="scroll"><table class="tbl stack"><tbody>${audit.map((r) => `<tr><td class="mono">${esc(when(r.at))}</td><td>${esc(t(L, "act_" + r.action))}</td><td>${esc(r.reason || "")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted-p">-</p>`;
   const blocked = st === "suspended" || st === "banned";
   const statusText = st === "development" ? t(L, "c_dev_note") : st === "unverified" ? t(L, "c_unverified_note") : st === "active" ? (a.active_since && !a.limit_lifted && Date.now() / 1000 - a.active_since < 7 * 86400 ? t(L, "c_new_limit_note") : t(L, "c_active_note")) : t(L, "c_blocked_note");
-  const appeal = blocked ? (openAppeal ? `<p>${esc(t(L, "c_appeal_open"))}</p>` : `<form method="post" action="/console/app/${esc(app.client_id)}/appeal">${csrfField(s)}<label class="field"><span class="lbl">${esc(t(L, "c_appeal"))}</span><textarea name="text" rows="4" required maxlength="4000"></textarea></label><button class="pill" type="submit" id="appeal">${esc(t(L, "c_appeal_send"))}</button></form>`) : "";
+  const appeal = blocked ? (openAppeal ? `<p>${esc(t(L, "c_appeal_open"))}</p>` : `<form method="post" action="/console/app/${esc(app.client_id)}/appeal">${csrfField(s)}<label class="field"><span class="lbl">${esc(t(L, "c_appeal"))}</span><textarea class="prose" name="text" rows="4" required maxlength="4000"></textarea></label><button class="pill" type="submit" id="appeal">${esc(t(L, "c_appeal_send"))}</button></form>`) : "";
   const body = `<p class="crumb"><a href="/console">${esc(t(L, "c_title"))}</a></p>
 <h1 class="title">${esc(localName(app, L))}</h1>${userBar(L, s)}
 ${msg ? notice(esc(t(L, "c_msg_" + msg)), "ok") : ""}
@@ -163,13 +163,13 @@ ${errors.length ? `<div class="alert" role="alert">${icon("alert")}<div>${errors
 ${target ? `<input type="hidden" name="target" value="${esc(`${target.kind}:${target.id}`)}">${kv([[t(v.lang, kind === "idp" ? "rep_target_idp" : "rep_target_app"), `<b>${esc(targetName || target.id)}</b> <span class="mono">${esc(target.id)}</span>`]])}`
     : `<label class="field"><span class="lbl">${esc(t(v.lang, "rep_target_id"))}</span><input name="target_id" required maxlength="80" spellcheck="false" placeholder="app-… / idp id" value="${esc(f.target_id || "")}"></label><div class="seg-radio"><label><input type="radio" name="target_kind" value="app" checked> ${esc(t(v.lang, "rep_target_app"))}</label><label><input type="radio" name="target_kind" value="idp"> ${esc(t(v.lang, "rep_target_idp"))}</label></div>`}
 <fieldset class="field"><legend class="lbl">${esc(t(v.lang, "rep_category"))}</legend><div class="checks">${CATEGORIES.map((c, i) => `<label><input type="radio" name="category" value="${c}"${(f.category ? f.category === c : i === 0) ? " checked" : ""}> ${esc(t(v.lang, "rep_cat_" + c))}</label>`).join("")}</div></fieldset>
-<label class="field"><span class="lbl">${esc(t(v.lang, "rep_description"))}</span><textarea name="description" rows="5" required minlength="10" maxlength="4000">${esc(f.description || "")}</textarea></label>
+<label class="field"><span class="lbl">${esc(t(v.lang, "rep_description"))}</span><textarea class="prose" name="description" rows="5" required minlength="10" maxlength="4000">${esc(f.description || "")}</textarea></label>
 <label class="field"><span class="lbl">${esc(t(v.lang, "rep_email"))}</span><input type="email" name="contact_email" maxlength="254" value="${esc(f.contact_email || "")}"><span class="hint">${esc(t(v.lang, "rep_email_hint"))}</span></label>
 <div class="orbit-verify" data-sitekey="${esc(sitekey || "")}" data-action="report" data-lang="${v.lang === "zh" ? "zh" : "en"}"></div>
 <p class="hint">${esc(t(v.lang, "rep_privacy"))}</p>
 <div class="btnrow"><button class="pill" type="submit" id="send-report">${esc(t(v.lang, "rep_send"))}</button></div>
 </div></div></form>`;
-  return page(v, t(v.lang, "rep_title"), body);
+  return page(v, t(v.lang, "rep_title"), body, "", '\n<script src="https://verify.yunzheng.space/v1.js?v=1.4.0" async defer></script>');
 }
 
 // ---- operator ---------------------------------------------------------------------

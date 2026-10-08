@@ -73,6 +73,8 @@ export const C = {
     adm_act_dismiss: "Dismiss open reports", adm_act_warn: "Warn the owner", adm_act_suspend: "Suspend", adm_act_ban: "Ban (domain blocked)", adm_act_restore: "Restore", adm_act_lift: "Lift new-application limit",
     adm_act_idp_disable: "Emergency disable", adm_act_idp_enable: "Remove override", adm_override: "Operator override", adm_override_on: "Disabled",
     adm_forbidden: "This page is for RoamID operators.",
+    test_title: "Test an identity provider", test_lead: "Sign in once at an identity provider and see the claims RoamID gives an application. The subject shown here is pairwise for this page. Nothing is kept after the page is shown.",
+    test_run: "Test", test_ok: "Sign-in completed. Claims an application receives:", test_failed: "The sign-in did not complete.", test_again: "Test again",
   },
   zh: {
     nav_apps: "应用",
@@ -145,6 +147,8 @@ export const C = {
     adm_act_dismiss: "驳回待处理的举报", adm_act_warn: "警告所有者", adm_act_suspend: "暂停", adm_act_ban: "封禁（域名列入封禁名单）", adm_act_restore: "恢复", adm_act_lift: "解除新应用限额",
     adm_act_idp_disable: "紧急停用", adm_act_idp_enable: "撤销停用", adm_override: "运营方覆盖", adm_override_on: "已停用",
     adm_forbidden: "此页面仅供 RoamID 运营方使用。",
+    test_title: "测试身份提供方", test_lead: "在某个身份提供方登录一次，查看 RoamID 会给应用的声明。此处显示的主体标识是本页专用的 pairwise 标识。页面显示后不保留任何数据。",
+    test_run: "测试", test_ok: "登录完成。应用收到的声明：", test_failed: "登录未完成。", test_again: "再次测试",
   },
 };
 

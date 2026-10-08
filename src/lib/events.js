@@ -22,3 +22,15 @@ export async function summary(env, days = 7) {
   }
   return out;
 }
+
+// Per day (all applications together) and per identity provider, for /status.
+export async function daily(env, days = 14) {
+  const since = new Date(Date.now() - (days - 1) * 86400e3).toISOString().slice(0, 10);
+  const { results } = await env.DB.prepare("SELECT day, kind, SUM(n) AS n FROM events WHERE day >= ? GROUP BY day, kind ORDER BY day DESC").bind(since).all();
+  const byDay = new Map();
+  for (const r of results || []) { const d = byDay.get(r.day) || { day: r.day, started: 0, completed: 0, failed: 0 }; if (r.kind in d) d[r.kind] += r.n; byDay.set(r.day, d); }
+  const { results: idps } = await env.DB.prepare("SELECT idp, kind, SUM(n) AS n FROM events WHERE day >= ? AND idp != '' GROUP BY idp, kind ORDER BY idp").bind(since).all();
+  const byIdp = new Map();
+  for (const r of idps || []) { const d = byIdp.get(r.idp) || { idp: r.idp, completed: 0, failed: 0 }; if (r.kind in d) d[r.kind] += r.n; byIdp.set(r.idp, d); }
+  return { days, per_day: [...byDay.values()], per_idp: [...byIdp.values()] };
+}

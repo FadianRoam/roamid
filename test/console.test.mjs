@@ -233,7 +233,9 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   const tx = new URL(BASE + (await h.request(`/authorize?${q}`)).headers.get("Location")).searchParams.get("tx");
   const form = await h.request(`/report?app=${c.id}&tx=${tx}`);
   assert.match(form.headers.get("Content-Security-Policy"), /script-src 'self' https:\/\/verify\.yunzheng\.space/);
-  assert.match(await form.text(), /data-sitekey="ovk_test"/);
+  const formHtml = await form.text();
+  assert.match(formHtml, /data-sitekey="ovk_test"/);
+  assert.match(formHtml, /<script src="https:\/\/verify\.yunzheng\.space\/v1\.js[^"]*" async defer><\/script>/, "the widget script is on the page");
   const rep = (token, extra = {}) => h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, tx, category: "phishing", description: "It asks for my bank password.", "orbit-verify-response": token, ...extra }).toString(), headers: { "CF-Connecting-IP": "198.51.100.7" } });
   const denied = await rep("bad-token");
   assert.equal(denied.status, 403);
@@ -353,4 +355,26 @@ test("block list: a listed host refuses the application", async () => {
   await refreshBlocklists(h.env, { force: true }); resetListMemo();
   await consoleLogin(h, USERS.alice);
   assert.match((await createApp(h)).body, /data-code="reputation"/);
+});
+
+test("/test/<idp>: one sign-in, the normalized claims shown, pairwise subject, nothing kept", async () => {
+  const h = await consoleSetup();
+  h.cookies = new Map();
+  let r = await h.request("/test");
+  assert.match(await r.text(), /href="\/test\/good"/);
+  r = await h.request("/test/good");
+  assert.equal(r.status, 303);
+  const authz = new URL(BASE + r.headers.get("Location"));
+  assert.equal(authz.searchParams.get("idp_hint"), "good");
+  r = await h.request(authz.pathname + authz.search);
+  const up = r.headers.get("Location");
+  assert.ok(up.startsWith(h.idps.good.issuer), up);
+  r = await h.request(h.idps.good.issue(up, USERS.bob));
+  const back = r.headers.get("Location");
+  assert.ok(back.startsWith(`${BASE}/test/callback?`));
+  const page = await (await h.request(back)).text();
+  assert.match(page, /id="test-claims"/);
+  assert.match(page, /bob@example\.org/);
+  assert.doesNotMatch(page, new RegExp(await publicSub(USERS.bob)), "pairwise, not the public sub");
+  assert.equal((await h.request("/test/no-such-idp")).status, 404);
 });

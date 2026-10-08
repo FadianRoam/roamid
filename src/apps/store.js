@@ -13,11 +13,23 @@ import { now } from "../lib/http.js";
 export const CONSOLE_CLIENT_ID = "roamid-console";
 export const DOMAIN_GRACE = 72 * 3600;
 
+export const TEST_CLIENT_ID = "roamid-test";
+
 export function consoleClient(env) {
   return {
     client_id: CONSOLE_CLIENT_ID, protocol: "oidc", status: "active", builtin: true,
     name: { en: "RoamID console", zh: "RoamID 控制台" }, homepage: `${env.BASE_URL}/console`,
     redirect_uris: [`${env.BASE_URL}/console/callback`], token_endpoint_auth_method: "none", subject_type: "public",
+    domain: new URL(env.BASE_URL).host,
+  };
+}
+
+// /test/<idp>: a sign-in that only shows the normalized claims.
+export function testClient(env) {
+  return {
+    client_id: TEST_CLIENT_ID, protocol: "oidc", status: "active", builtin: true,
+    name: { en: "RoamID test page", zh: "RoamID 测试页" }, homepage: `${env.BASE_URL}/test`,
+    redirect_uris: [`${env.BASE_URL}/test/callback`], token_endpoint_auth_method: "none", subject_type: "pairwise",
     domain: new URL(env.BASE_URL).host,
   };
 }
@@ -64,6 +76,7 @@ export async function resolveClient(env, reg, clientId, proto = "oidc") {
   const id = String(clientId || "");
   let client = null;
   if (id === CONSOLE_CLIENT_ID) client = consoleClient(env);
+  else if (id === TEST_CLIENT_ID) client = testClient(env);
   else if (reg.clients.has(id)) { const c = reg.clients.get(id); client = c.status === "active" ? c : null; }
   else { const row = await loadApp(env, id); client = row ? appEntry(row) : null; }
   if (!client || client.protocol !== proto) return null;

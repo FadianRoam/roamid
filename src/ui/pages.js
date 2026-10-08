@@ -55,7 +55,7 @@ ${["system", "light", "dark"].map((v) => `<a href="${esc(prefLink("theme", v, pa
 </nav>`;
 }
 
-function doc({ lang, theme, title, body, anim = false }) {
+function doc({ lang, theme, title, body, anim = false, head = "" }) {
   return `<!doctype html>
 <html lang="${lang === "zh" ? "zh-CN" : "en"}"${theme !== "system" ? ` data-theme="${theme}"` : ""}${anim ? " data-anim" : ""}>
 <head>
@@ -67,7 +67,7 @@ function doc({ lang, theme, title, body, anim = false }) {
 <link rel="preload" href="${ASSETS["fonts/figtree-latin.woff2"]}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${ASSETS["roamid.css"]}">
 <script src="${ASSETS["boot.js"]}"></script>
-<script src="${ASSETS["roamid.js"]}" defer></script>
+<script src="${ASSETS["roamid.js"]}" defer></script>${head}
 </head>
 <body>
 ${body}
@@ -77,9 +77,9 @@ ${body}
 
 const band = () => `<div class="band" aria-hidden="true"><video muted loop playsinline preload="metadata" poster="${ASSETS["poster.webp"]}"><source src="${ASSETS["band.mp4"]}" type="video/mp4"></video></div>`;
 
-export function contentPage({ lang, theme, path, active, title, body, narrow = false }) {
+export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "" }) {
   const foot = `<footer class="foot"><a href="/">RoamID</a><a href="/idps">${esc(t(lang, "nav_idps"))}</a><a href="/status">${esc(t(lang, "nav_status"))}</a><a href="/apps">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="/report">${esc(t(lang, "rep_title"))}</a><a href="/demo">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></footer>`;
-  return doc({ lang, theme, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${foot}</div>` });
+  return doc({ lang, theme, head, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${foot}</div>` });
 }
 
 const hostOf = (u) => { try { return new URL(u).host; } catch { return ""; } };
@@ -205,6 +205,7 @@ ${sec(t(lang, "status_keys"), kv([[t(lang, "status_signing"), keys(s.keys.signin
 ${(s.saml_metadata || []).length ? sec(t(lang, "status_saml_meta"), `<div class="scroll"><table class="tbl"><tbody>${s.saml_metadata.map((m) => `<tr><td class="mono">${esc(m.idp)}</td><td>${esc(m.fetched_at || "-")}</td><td>${m.valid_until ? `${esc(t(lang, "status_valid_until"))} ${esc(m.valid_until)}` : ""}</td><td class="mono">${esc(m.last_error || "")}</td></tr>`).join("")}</tbody></table></div>`) : ""}
 ${sec(t(lang, "status_counts"), kv([[t(lang, "status_started"), `${s.counts.started}`], [t(lang, "status_completed"), `${s.counts.completed}`],
     [t(lang, "status_failed"), `${s.counts.failed}${Object.keys(s.counts.failures).length ? " · " + Object.entries(s.counts.failures).map(([k, v]) => `<code>${esc(k)}</code> ${v}`).join(", ") : ""}`]]))}
+${s.daily && s.daily.per_day.length ? sec(t(lang, "status_daily"), `<div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "c_day"))}</th><th>${esc(t(lang, "status_started"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_day.map((d) => `<tr><td class="mono">${esc(d.day)}</td><td>${d.started}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>${s.daily.per_idp.length ? `<div class="scroll gap"><table class="tbl"><thead><tr><th>${esc(t(lang, "nav_idps"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_idp.map((d) => `<tr><td class="mono">${esc(d.idp)}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>` : ""}`) : ""}
 ${sec(t(lang, "status_version"), kv([["RoamID", esc(s.version)], ["Deployment", `<code>${esc(s.deployment || "-")}</code>`]]))}
 <p class="lead"><a href="/status.json">/status.json</a></p>`;
   return contentPage({ lang, theme, path: "/status", active: "status", title: t(lang, "status_title"), body });

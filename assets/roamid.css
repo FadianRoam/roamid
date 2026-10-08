@@ -222,3 +222,5 @@ form.act{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}form.act input{fle
 .picker .report-link{display:block;margin-top:8px;font-size:calc(12.5 * var(--dp));color:var(--dim)}
 .ctx .verified{color:var(--ok)}
 .orbit-verify{margin-top:16px;min-height:10px}
+.scroll.gap{margin-top:12px}
+.form textarea.prose,form textarea.prose{font-family:var(--font);font-size:16px;line-height:1.5}

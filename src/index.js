@@ -5,7 +5,7 @@ import { safeEqual } from "./lib/b64.js";
 import { signingKeys, clientKeys } from "./lib/keys.js";
 import { allow } from "./lib/ratelimit.js";
 import { clientIp } from "./lib/edgesig.js";
-import { summary } from "./lib/events.js";
+import { summary, daily } from "./lib/events.js";
 import { getRegistry, syncRegistry } from "./registry/store.js";
 import { checkDomainProofs, proofState } from "./registry/domains.js";
 import { discoveryDoc, authorize, select, callback, token, userinfo, logout, healthMap, samlAcs, samlSso, samlCancel } from "./oidc/op.js";
@@ -20,6 +20,7 @@ import { demoPage } from "./ui/demo.js";
 import { VERSION } from "./version.js";
 import { serveAssetWithRange } from "./lib/range.js";
 import { handleConsole, handleApps, handleReport, handleAdmin } from "./console/routes.js";
+import { handleTest } from "./console/testpage.js";
 import { recheckApps, refreshBlocklists } from "./apps/review.js";
 
 const PUBLIC_CACHE = "public, max-age=300";
@@ -46,8 +47,12 @@ async function statusData(env) {
   };
   let keys = { signing: [], client: [], saml: [] };
   try { keys = { signing: keyInfo((await signingKeys(env)).jwks, env.SIGNING_KEYS), client: keyInfo((await clientKeys(env)).jwks, env.CLIENT_KEYS), saml: [] }; } catch (e) { keys.error = e.message; }
-  // SAML certificates: warn 30 days before expiry.
+  // SAML certificates: warn 30 days before expiry. Signing and client keys
+  // older than a year: a reminder to rotate (docs/operations.md).
   const warnings = [];
+  for (const [kind, list] of [["signing", keys.signing], ["client", keys.client]]) {
+    for (const k of list || []) if (k.created && Date.parse(k.created) / 1000 < t - 365 * 86400) warnings.push(`${kind} key ${k.kid} is older than one year (created ${k.created})`);
+  }
   try {
     for (const k of samlKeys(env)) {
       const i = certInfo(k.cert);
@@ -76,6 +81,7 @@ async function statusData(env) {
     warnings,
     saml_metadata: samlMeta.map((m) => ({ idp: m.idp, fetched_at: iso(m.fetched_at), checked_at: iso(m.checked_at), valid_until: iso(m.valid_until), last_error: m.last_error })),
     counts: await summary(env, 7),
+    daily: await daily(env, 14),
   };
 }
 
@@ -150,6 +156,7 @@ export async function handle(request, env, ctx) {
   if (p === "/status") return html(statusPage({ ...v, s: await statusData(env) }), { nonce: v.nonce });
   if (p === "/demo" || p === "/demo/callback") return html(demoPage(v));
   if (p === "/demo/saml") return demoSamlPage(v);
+  if (p === "/test" || p.startsWith("/test/")) { if (!(await allow(env, "authorize", await clientIp(request, env)))) return html(errorPage({ ...v, path: "/", code: "rate_limited", requestId: "-" }), { status: 429 }); const r = await handleTest(request, env, p, v); if (r) return r; }
   if (p === "/robots.txt") return text("User-agent: *\nDisallow: /authorize\nDisallow: /select\nDisallow: /callback/\nDisallow: /demo/callback\nDisallow: /console\nDisallow: /admin\nDisallow: /report\n", { cache: PUBLIC_CACHE });
   if (p === "/favicon.ico") return new Response(null, { status: 204, headers: { "Cache-Control": PUBLIC_CACHE } });
   return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404, nonce: v.nonce });
