@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schema/client.schema.json",
+  "client_id": "roamid-demo",
+  "protocol": "oidc",
+  "name": { "en": "RoamID demo", "zh": "RoamID 演示" },
+  "homepage": "https://id.fadianro.am/demo",
+  "contact": { "github": "yunzheng2006", "email": "support@yunzheng.space" },
+  "redirect_uris": ["https://id.fadianro.am/demo/callback"],
+  "post_logout_redirect_uris": ["https://id.fadianro.am/demo"],
+  "token_endpoint_auth_method": "none",
+  "subject_type": "public",
+  "status": "active"
+}
