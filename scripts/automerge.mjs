@@ -100,7 +100,8 @@ export async function run({ api, repo, only, dry, base, review, log = console.lo
   const prs = only ? [await api(`/pulls/${only}`)] : await api("/pulls?state=open&per_page=50");
   const merged = [];
   for (const pr of prs) {
-    if (pr.state !== "open" || pr.draft) continue;
+    // Drafts are never merged; a dry run of one named pull request may review a draft.
+    if (pr.state !== "open" || (pr.draft && !(only && dry))) continue;
     const d = await decide(pr, { api, repo, base, review }).catch((e) => ({ reasons: [`review failed: ${e.message}`], error: true }));
     if (d.wait) { log(`#${pr.number}: waiting (${d.wait})`); continue; }
     if (d.merge) {
