@@ -115,6 +115,83 @@ ID 令牌用 ES256 签名，公钥在 `/jwks.json`，带 `kid`，有效期 1 小
 
 每个客户端 IP 地址：授权请求每分钟 60 次，令牌请求每分钟 120 次，UserInfo 每分钟 300 次。每个客户端：令牌请求每分钟 600 次。超出返回 HTTP 429。
 
+## 10. 示例
+
+### 单页应用，不用库
+
+`/demo` 的演示应用是完整示例（源码：`src/ui/demo.js`）。要点：
+
+```js
+const B = "https://id.fadianro.am", CID = "<client_id>", RU = location.origin + "/callback";
+const b64 = (a) => btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const rnd = (n) => b64(crypto.getRandomValues(new Uint8Array(n)));
+
+// sign in
+const verifier = rnd(48), state = rnd(24), nonce = rnd(24);
+const challenge = b64(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+sessionStorage.setItem("roamid", JSON.stringify({ verifier, state, nonce }));
+location.assign(`${B}/authorize?` + new URLSearchParams({ response_type: "code", client_id: CID, redirect_uri: RU,
+  scope: "openid email profile", state, nonce, code_challenge: challenge, code_challenge_method: "S256" }));
+
+// on the callback page
+const q = new URLSearchParams(location.search), s = JSON.parse(sessionStorage.getItem("roamid"));
+if (q.get("state") !== s.state || q.get("iss") !== B) throw new Error("bad response");
+const tok = await (await fetch(`${B}/token`, { method: "POST", body: new URLSearchParams({ grant_type: "authorization_code",
+  code: q.get("code"), redirect_uri: RU, client_id: CID, code_verifier: s.verifier }) })).json();
+const user = await (await fetch(`${B}/userinfo`, { headers: { Authorization: `Bearer ${tok.access_token}` } })).json();
+```
+
+### Node.js，openid-client 6
+
+```js
+import * as oidc from "openid-client";
+
+const config = await oidc.discovery(new URL("https://id.fadianro.am"), "example-portal", process.env.ROAMID_SECRET);
+// client_secret_basic is the default for a secret; use oidc.None() as the 4th argument for a public client.
+
+// sign in
+const verifier = oidc.randomPKCECodeVerifier();
+const state = oidc.randomState(), nonce = oidc.randomNonce();
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: "https://portal.example.com/auth/roamid/callback", scope: "openid email profile",
+  code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state, nonce,
+});
+// store verifier, state, nonce in the session, then redirect to url
+
+// callback
+const tokens = await oidc.authorizationCodeGrant(config, new URL(req.url, "https://portal.example.com"), {
+  pkceCodeVerifier: verifier, expectedState: state, expectedNonce: nonce,
+});
+const claims = tokens.claims(); // sub, idp, email, email_verified, email_authority, name
+```
+
+### Python，Authlib
+
+```python
+import requests
+from authlib.integrations.requests_client import OAuth2Session
+from authlib.common.security import generate_token
+from authlib.jose import jwt, JsonWebKey
+from authlib.oidc.core import CodeIDToken
+
+meta = requests.get("https://id.fadianro.am/.well-known/openid-configuration", timeout=10).json()
+client = OAuth2Session("example-portal", SECRET, scope="openid email profile",
+                       redirect_uri="https://portal.example.com/auth/roamid/callback",
+                       code_challenge_method="S256", token_endpoint_auth_method="client_secret_basic")
+
+verifier, nonce = generate_token(48), generate_token(24)
+url, state = client.create_authorization_url(meta["authorization_endpoint"], code_verifier=verifier, nonce=nonce)
+# store verifier, state, nonce; redirect to url
+
+# callback: callback_url is the full URL the browser returned to
+token = client.fetch_token(meta["token_endpoint"], authorization_response=callback_url, code_verifier=verifier, state=state)
+keys = JsonWebKey.import_key_set(requests.get(meta["jwks_uri"], timeout=10).json())
+claims = jwt.decode(token["id_token"], keys, claims_cls=CodeIDToken,
+                    claims_options={"iss": {"essential": True, "value": meta["issuer"]}},
+                    claims_params={"nonce": nonce, "client_id": "example-portal"})
+claims.validate()
+```
+
 ## 11. SAML 2.0 服务方
 
 只支持 SAML 2.0 的应用登记 `"protocol": "saml2"` 的条目（schema `schema/client-saml2.schema.json`），RoamID 即成为它的 SAML 身份提供方。

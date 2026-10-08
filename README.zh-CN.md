@@ -62,6 +62,7 @@ RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP�
 | `/apps`、`/apps.json` | 已启用的应用与被封禁的域名 |
 | `/report` | 举报应用或身份提供方 |
 | `/admin/reports` | 运营方队列（仅运营方） |
+| `/test`、`/test/<idp-id>` | 在某个身份提供方登录一次，显示统一后的声明 |
 | `/demo` | 演示应用（使用 PKCE 的公开客户端） |
 | `/demo/saml` | SAML 服务方演示 |
 | `POST /admin/sync` | 运营方立即同步登记表（Bearer 令牌） |

@@ -93,6 +93,8 @@ The `id` is permanent. To retire a provider, set `"status": "disabled"`.
 
 ## 6. Checking an entry
 
+After the merge, `https://id.fadianro.am/test/<id>` runs one sign-in at the provider and shows the claims applications receive (with a subject that is only valid for that page). `/idps` and `/status` show the health of the provider.
+
 Run the registry check locally before opening a pull request:
 
 ```

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 (unreleased)
+## 1.1.0 (2026-10-08)
 
 - SAML 2.0 HTTP-Redirect binding: `SAMLRequest`, `SAMLResponse`, `RelayState`, `SigAlg` and `Signature` may appear once each (compared by decoded name); the signed octets and the processed values come from the same occurrence. HTTP-POST fields may appear once each. A signed HTTP-POST `AuthnRequest` is read from the verified copy.
 - SAML 2.0 encrypted assertions: AES-GCM; AES-CBC only inside a signed `Response`. Every decryption or parsing failure of an encrypted assertion gives the single error `saml_invalid_response`. Service provider metadata lists AES-GCM only.
@@ -10,6 +10,11 @@
 - Application pull requests that only touch `registry/clients/` are merged automatically when they pass the same review (`automerge` workflow).
 - `/apps` and `/apps.json`; the picker shows the application's proven domain.
 - Reports (`/report`, Orbit Verify), the operator queue (`/admin/reports`), dismiss / warn / suspend / ban / restore with an audit log, appeals, identity provider emergency override, help desk tickets for the operator.
+- `/test` and `/test/<idp>`: one sign-in at an identity provider, showing the normalized claims (pairwise subject for that page).
+- `/status`: sign-ins per day and per identity provider (aggregates only), SAML certificates and metadata, warnings for expiring certificates and keys older than one year.
+- Pull-request job summary: SAML metadata probe and the automated application review.
+- Scripted conformance checks (`scripts/conformance.mjs`, [docs/conformance.md](docs/conformance.md)).
+- Operator runbook, SAML certificate rotation and abuse limits in `docs/operations.md`.
 - New error codes: `app_suspended`, `app_banned`, `app_unverified`, `app_development`, `app_new_limit`.
 - XML signatures: exclusive canonicalization without comments only; transforms limited to enveloped-signature and exclusive canonicalization.
 

@@ -36,6 +36,7 @@ Example: a hosting provider adds "Sign in with RoamID" to its customer portal.
 | [docs/idp-requirements.md](docs/idp-requirements.md) | Identity providers: compatibility requirements, redirect URI, client authentication, email domains |
 | [docs/registry.md](docs/registry.md) | Adding or changing a registry entry by pull request |
 | [docs/policy.md](docs/policy.md) | Acceptable use, reports, operator actions, appeals |
+| [docs/conformance.md](docs/conformance.md) | Conformance checks and interoperability runs |
 | [docs/errors.md](docs/errors.md) | Error codes |
 | [docs/operations.md](docs/operations.md) | Running an instance: deployment, secrets, key rotation |
 | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md) | |
@@ -62,6 +63,7 @@ The interface described in these documents is version 1.
 | `/apps`, `/apps.json` | Active applications and banned domains |
 | `/report` | Report an application or identity provider |
 | `/admin/reports` | Operator queue (operators only) |
+| `/test`, `/test/<idp-id>` | One sign-in at an identity provider, showing the normalized claims |
 | `/demo` | Demo application (public client with PKCE) |
 | `/demo/saml` | Demo SAML service provider |
 | `POST /admin/sync` | Immediate registry sync for the operator (bearer token) |

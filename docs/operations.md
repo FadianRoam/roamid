@@ -47,8 +47,51 @@ The first key in `SIGNING_KEYS` signs ID tokens; every key in the array is publi
 4. Retire: after another 24 hours (ID tokens live 1 hour; assertions 60 seconds), remove the old key.
    退役：再过 24 小时（ID 令牌有效 1 小时，断言 60 秒）移除旧密钥。
 
-`/status` lists the key ids and their creation dates.
-`/status` 列出密钥 id 及其创建日期。
+`/status` lists the key ids and their creation dates, and warns when a signing or client key is older than one year.
+`/status` 列出密钥 id 及其创建日期，签名或客户端密钥超过一年时显示警告。
+
+### SAML certificates / SAML 证书
+
+`SAML_KEYS` holds `{kid, cert, key}` pairs. The first pair signs; every certificate is published in both metadata documents, and every key is tried for encrypted assertions. Generate a pair with `openssl req -x509 -newkey rsa:3072 -nodes -days 1095 -subj "/CN=RoamID SAML" -keyout key.pem -out cert.pem` (the key as PKCS#8).
+`SAML_KEYS` 保存 `{kid, cert, key}`。第一对用于签名；所有证书都发布在两份元数据中，解密加密断言时逐一尝试所有私钥。
+
+1. Publish: append the new pair, `secret put`. Its certificate appears in `/saml/sp/metadata.xml` and `/saml/idp/metadata.xml`. / 发布：追加新的一对并 `secret put`，其证书出现在两份元数据中。
+2. Overlap: identity providers and service providers that load the metadata pick it up; tell the operators of those that pasted the certificate by hand (the registry `contact`). Wait until they confirm, or at least 7 days. / 重叠：载入元数据的身份提供方与服务方会自动取到；手工粘贴证书的，通过登记表的 `contact` 通知其运营方，等其确认或至少 7 天。
+3. Switch: move the new pair to the front. / 切换：把新的一对移到最前。
+4. Retire: remove the old pair after another 7 days. / 退役：再过 7 天移除旧的一对。
+
+`/status` warns 30 days before a RoamID or identity provider SAML certificate expires.
+RoamID 或身份提供方的 SAML 证书到期前 30 天，`/status` 显示警告。
+
+### Other credentials / 其他凭据
+
+| Credential | Rotation |
+|---|---|
+| `IDP_SECRET_<ID>` | Create the new secret at the identity provider while the old one stays valid there, `secret put`, then remove the old one at the provider. / 在身份提供方处新建密钥（旧密钥暂保留），`secret put`，再在提供方处删除旧密钥。 |
+| Console client secrets | Owners rotate in the console: "New client secret" keeps the previous one valid until "Revoke the previous secret". / 所有者在控制台轮换：「生成新的客户端密钥」后上一个继续有效，直到「吊销上一个密钥」。 |
+| `ADMIN_TOKEN`, `VERIFY_SECRET`, `HELPDESK_API_KEY`, `CDN_KEY` | `secret put` the new value; for `VERIFY_SECRET` and `HELPDESK_API_KEY` change the other side (Orbit Verify site, help desk) at the same time. / `secret put` 新值；`VERIFY_SECRET` 与 `HELPDESK_API_KEY` 要同时修改另一侧（Orbit Verify 站点、客服系统）。 |
+
+## Cron / 定时任务
+
+Every 5 minutes: registry sync, email domain proofs, identity provider health (OIDC discovery and JWKS; SAML metadata refresh with the last good copy kept until `validUntil`), console application domain proofs (pending every 15 minutes, proven daily), block lists (daily), clean-up of expired rows.
+每 5 分钟：登记表同步、邮箱域名证明、身份提供方健康（OIDC discovery 与 JWKS；SAML 元数据刷新，保留最后一份有效副本直到 `validUntil`）、控制台应用的域名证明（待证明的每 15 分钟、已证明的每天）、黑名单（每天）、清理过期数据。
+
+## Abuse limits / 滥用与限额
+
+| Limit | Value |
+|---|---|
+| `/authorize`, `/select`, `/callback`, SAML endpoints, `/test` | 60 per minute per address |
+| `/token` | 120 per minute per address, 600 per minute per client |
+| `/userinfo` | 300 per minute per address |
+| `/report` | 5 per hour per address (and Orbit Verify) |
+| Console form posts | 30 per minute per person |
+| Console applications | 10 per person, 200 new per day in total, 500 sign-ins per day during the first 7 days |
+| Registry | 500 identity providers, 5000 applications, 2 MiB |
+| Upstream requests | 10 seconds each |
+| SAML messages | 512 KiB, no DTD |
+
+Addresses are stored only as truncated hashes, per window.
+地址只以截断的哈希按时间窗保存。
 
 ## Registry sync / 登记表同步
 
@@ -61,7 +104,11 @@ The first key in `SIGNING_KEYS` signs ID tokens; every key in the array is publi
 
 | Situation / 情况 | Action / 处置 |
 |---|---|
-| Disable an identity provider quickly / 快速停用身份提供方 | Merge a pull request setting `"status": "disabled"`, then `POST /admin/sync`. Effective within seconds of the Pages deploy. For an emergency without a merge, delete its `IDP_SECRET_<ID>` (client_secret providers): sign-ins at it fail with `upstream_not_configured`. / 合并把 `status` 改为 `disabled` 的拉取请求，再 `POST /admin/sync`。紧急情况下（未合并）可删除其 `IDP_SECRET_<ID>`，该提供方的登录随即失败（`upstream_not_configured`）。 |
+| Disable an identity provider quickly / 快速停用身份提供方 | Emergency: `/admin/target/idp/<id>`, "Emergency disable" with a reason. It takes effect on the next request everywhere (picker, callbacks, SAML ACS) and is recorded in the audit log; "Remove override" undoes it. Permanent: merge a pull request setting `"status": "disabled"`, then `POST /admin/sync`. / 紧急：在 `/admin/target/idp/<id>` 点「紧急停用」并注明原因，下一次请求起在各处（选择页、回调、SAML ACS）生效并记入审计日志；「撤销停用」恢复。永久：合并把 `status` 改为 `disabled` 的拉取请求，再 `POST /admin/sync`。 |
+| A report arrives / 收到举报 | The operator gets a help desk ticket (Trust Review group) and the item is in `/admin/reports`, ordered by distinct reporters in 24 hours. Open the target, check the site, then dismiss, warn, suspend (temporary) or ban (illegal sites; the domain is blocked for new applications). Every action needs a reason; the owner sees it. / 运营方收到客服工单（Trust Review 组），条目出现在 `/admin/reports`，按 24 小时内不同举报者数排序。打开对象、检查站点，然后驳回、警告、暂停（临时）或封禁（违法站点；其域名不能再用于新应用）。每个处理都要写原因，所有者可见。 |
+| An appeal arrives / 收到申诉 | It is a new item for the same application. Restore (the application returns to `active` when its checks and domain proof hold) or keep the action and dismiss the appeal. / 申诉是同一应用的新条目。恢复（检查与域名证明仍成立时回到 `active`）或维持处理并驳回申诉。 |
+| An operator loses access / 运营方无法登录 | `OPERATOR_SUBS` lists RoamID public subs. An operator signs in through any active identity provider; when that provider is disabled, use another account listed in `OPERATOR_SUBS`, or update the secret. / `OPERATOR_SUBS` 列出 RoamID public sub。运营方可经任一启用中的身份提供方登录；该提供方被停用时，用 `OPERATOR_SUBS` 中的其他账户，或更新该密钥。 |
+| Automatic merges must stop / 需要停止自动合并 | Disable the `automerge` workflow in the repository's Actions settings, or remove its triggers. Pull requests then wait for a maintainer. / 在仓库 Actions 设置中停用 `automerge` 工作流，或删除其触发器；拉取请求随后等待维护者处理。 |
 | Rotate keys / 轮换密钥 | See Key rotation. / 见上文。 |
 | Restore the registry / 恢复登记表 | Revert the bad commit on `main` (a new commit; identifiers must not disappear), let the publish workflow run, then `POST /admin/sync`. Until then RoamID keeps serving the last copy that loaded. / 在 `main` 上以新提交撤销错误改动（标识不得消失），等发布工作流完成后 `POST /admin/sync`。在此之前 RoamID 继续使用最后一份成功载入的副本。 |
 | A domain proof is lost / 域名证明失效 | `/status` shows `grace` for 48 hours, then `lost`. Ask the provider's contact to restore the TXT record, then `POST /admin/sync`. / `/status` 先显示 48 小时 `grace`，之后 `lost`。请提供方联系人恢复 TXT 记录，然后 `POST /admin/sync`。 |

@@ -98,7 +98,7 @@ export async function settleStatus(env, row) {
     await env.DB.prepare("UPDATE apps SET status = ?, active_since = COALESCE(active_since, ?), updated_at = ? WHERE client_id = ?")
       .bind(want, want === "active" ? t : null, t, row.client_id).run();
     await env.DB.prepare("INSERT INTO audit (at, actor, target_kind, target_id, action, reason) VALUES (?, 'system', 'app', ?, ?, ?)")
-      .bind(t, row.client_id, want === "active" ? "activated" : "development", want === "active" ? "automated checks passed and the domain is proven" : (needsDevelopment(entry) ? "a callback is on localhost" : !entry.app.domain_verified ? "the domain proof is missing" : "the block lists are not loaded yet")).run();
+      .bind(t, row.client_id, want === "active" ? "activated" : "development", want === "active" ? "sys_active" : (needsDevelopment(entry) ? "sys_localhost" : !entry.app.domain_verified ? "sys_no_proof" : "sys_lists_pending")).run();
   }
   return want;
 }
