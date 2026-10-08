@@ -96,7 +96,6 @@ html.staged .hero[data-page=picker] .card{top:42px;max-height:470px}
 /* portrait phones: one screen, the card's list scrolls */
 @media (max-width:939px) and (orientation:portrait) and (min-height:600px){
   .hero{height:100svh;overflow:hidden}
-  .hero[data-page=landing] .card{max-height:calc(100% - 8px)}
 }
 
 /* ---- card internals (design px) ---- */
@@ -186,3 +185,4 @@ html.entering .card{transition:translate .9s cubic-bezier(.2,.8,.2,1) .65s,opaci
 .actions .pill.demo{pointer-events:none}
 html[lang^=zh] .display{font-size:clamp(28px,7.4vw,55.7px)}
 html.staged[lang^=zh] .display{font-size:55.7px}
+.hero[data-page=landing] .rows{flex:none;overflow:visible}
