@@ -1,0 +1,38 @@
+// Labels of the two issue forms (.github/ISSUE_TEMPLATE/*.yml) -> field keys.
+export const APP_FORM = {
+  "client_id": "client_id",
+  "Name (English) / 名称（英文）": "name_en",
+  "Name (Chinese) / 名称（中文）": "name_zh",
+  "Domain / 域名": "domain",
+  "Homepage / 主页": "homepage",
+  "Protocol / 协议": "protocol",
+  "Redirect URIs (OIDC) / 回调地址": "redirect_uris",
+  "Post-logout redirect URIs (OIDC) / 注销后跳转地址": "post_logout_redirect_uris",
+  "Client authentication (OIDC) / 客户端认证": "auth",
+  "JWKS URI (private_key_jwt)": "jwks_uri",
+  "Entity ID (SAML) / 实体 ID": "entity_id",
+  "ACS URLs (SAML) / ACS 地址": "acs_urls",
+  "AuthnRequest signing certificate (SAML) / 签名证书": "sign_cert",
+  "Subject type / 主体类型": "subject_type",
+  "Contact email / 联系邮箱": "email",
+};
+export const IDP_FORM = {
+  "id": "id",
+  "Name (English) / 名称（英文）": "name_en",
+  "Name (Chinese) / 名称（中文）": "name_zh",
+  "Protocol / 协议": "protocol",
+  "Homepage / 主页": "homepage",
+  "Issuer (OIDC)": "issuer",
+  "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "client_id",
+  "Client authentication (OIDC) / 客户端认证": "client_auth",
+  "Scopes (OIDC)": "scopes",
+  "Metadata URL (SAML) / 元数据地址": "metadata_url",
+  "Entity ID (SAML) / 实体 ID": "entity_id",
+  "SSO URL, HTTP-Redirect (SAML)": "sso_url",
+  "Signing certificate (SAML) / 签名证书": "certs",
+  "Subject source (SAML) / 主体标识来源": "sub_source",
+  "Released email addresses are verified (SAML) / 发出的邮箱地址已验证": "email_attribute_verified",
+  "Email domains / 邮箱域名": "email_domains",
+  "Contact email / 联系邮箱": "email",
+};
+export const labelsOf = (form) => Object.fromEntries(Object.entries(form).map(([l, k]) => [k, l]));

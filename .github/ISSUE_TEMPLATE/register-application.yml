@@ -1,0 +1,46 @@
+name: Register an application / 登记应用
+description: Without git. A bot turns this form into a pull request; applications that pass the automated review are merged automatically. / 无需 git。机器人把表单转为拉取请求；通过自动审核的应用会被自动合并。
+title: "Register application / 登记应用"
+labels: [registration, application]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste any secret here. For a client secret use `npm run new:app` locally, or choose `private_key_jwt` or `none`. Prove the domain before or after submitting (docs/rp-integration.md section 12). The registry is public.
+        不要在这里粘贴任何密钥。需要客户端密钥时请在本地运行 `npm run new:app`，或选择 `private_key_jwt` 或 `none`。提交前后均可证明域名（docs/rp-integration.md 第 12 节）。登记表是公开的。
+  - type: input
+    attributes: { label: "client_id", description: "a-z, 0-9, -; permanent. Not starting with app-." }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Name (English) / 名称（英文）" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Name (Chinese) / 名称（中文）" }
+  - type: input
+    attributes: { label: "Domain / 域名", description: "example.com" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Homepage / 主页", description: "https://example.com/" }
+    validations: { required: true }
+  - type: dropdown
+    attributes: { label: "Protocol / 协议", options: [oidc, saml2] }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: "Redirect URIs (OIDC) / 回调地址", description: "One per line / 每行一个", render: text }
+  - type: textarea
+    attributes: { label: "Post-logout redirect URIs (OIDC) / 注销后跳转地址", render: text }
+  - type: dropdown
+    attributes: { label: "Client authentication (OIDC) / 客户端认证", options: [none, private_key_jwt, client_secret (use npm run new:app)] }
+  - type: input
+    attributes: { label: "JWKS URI (private_key_jwt)" }
+  - type: input
+    attributes: { label: "Entity ID (SAML) / 实体 ID" }
+  - type: textarea
+    attributes: { label: "ACS URLs (SAML) / ACS 地址", render: text }
+  - type: textarea
+    attributes: { label: "AuthnRequest signing certificate (SAML) / 签名证书", description: "Certificate only (public). Never a private key.", render: text }
+  - type: dropdown
+    attributes: { label: "Subject type / 主体类型", options: [public, pairwise] }
+  - type: input
+    attributes: { label: "Contact email / 联系邮箱" }
+    validations: { required: true }

@@ -12,7 +12,9 @@
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check.mjs",
     "build-registry": "node scripts/build-registry.mjs",
-    "keygen": "node scripts/keygen.mjs"
+    "keygen": "node scripts/keygen.mjs",
+    "new:app": "node scripts/new-entry.mjs app",
+    "new:idp": "node scripts/new-entry.mjs idp"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",

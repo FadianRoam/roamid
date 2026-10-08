@@ -11,6 +11,7 @@ import { ASSETS } from "./manifest.js";
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const REPO = "https://github.com/FadianRoam/roamid";
 const DOCS = { en: `${REPO}#documentation`, zh: `${REPO}/blob/main/README.zh-CN.md#文档` };
+export const REGISTRY_DOCS = { en: `${REPO}/blob/main/docs/registry.md#without-an-account-at-a-listed-identity-provider`, zh: `${REPO}/blob/main/docs/zh-CN/registry.md` };
 const RP_DOCS = { en: `${REPO}/blob/main/docs/rp-integration.md`, zh: `${REPO}/blob/main/docs/zh-CN/rp-integration.md` };
 
 const ICON = {
@@ -95,6 +96,7 @@ ${nav({ lang, theme, path: "/", active: "" })}
 <h1 class="display"><span>${esc(t(lang, "hero_l1"))}</span><span>${esc(t(lang, "hero_l2"))}</span></h1>
 <p class="sub">${esc(t(lang, "hero_sub"))}</p>
 <a class="pill hero-cta" href="${esc(RP_DOCS[lang])}">${esc(t(lang, "hero_cta"))}</a>
+<a class="hero-note" href="${esc(REGISTRY_DOCS[lang])}" id="pr-channel">${esc(t(lang, "pr_channel"))}</a>
 <div class="scene">${band()}
 <div class="card" role="img" aria-label="${esc(t(lang, "sample_label"))}">
 <div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(t(lang, "sample_rp"))}</b><span class="host">portal.example.com</span></div>

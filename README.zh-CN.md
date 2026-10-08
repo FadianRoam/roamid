@@ -9,6 +9,8 @@ RoamID 是社区 OpenID Connect 身份中转。应用接入 RoamID 一次，其�
 - 已发布的登记表：https://fadianroam.github.io/roamid/registry.json
 - 许可证：Apache-2.0
 
+没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记：[docs/zh-CN/registry.md](docs/zh-CN/registry.md)（一键模板、议题表单、`npm run new:app`/`npm run new:idp`）。
+
 ## 工作方式
 
 RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP）。

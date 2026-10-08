@@ -6,6 +6,9 @@ name: check
 # the job summary.
 on:
   pull_request:
+  # Bot pull requests from registration issues (opened with the workflow
+  # token, which starts no pull_request workflow) are checked by dispatch.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,4 +32,4 @@ jobs:
           node scripts/build-assets.mjs --check
           node --test test/*.test.mjs
       - name: Registry
-        run: node scripts/check.mjs --base "origin/${{ github.base_ref }}" --probe --summary "$GITHUB_STEP_SUMMARY"
+        run: node scripts/check.mjs --base "origin/${{ github.base_ref || 'main' }}" --probe --summary "$GITHUB_STEP_SUMMARY"

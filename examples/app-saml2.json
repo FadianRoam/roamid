@@ -1,0 +1,21 @@
+{
+  "$schema": "../schema/client-saml2.schema.json",
+  "client_id": "example-wiki",
+  "protocol": "saml2",
+  "name": {
+    "en": "Example Wiki",
+    "zh": "示例维基"
+  },
+  "homepage": "https://wiki.example.com/",
+  "domain": "example.com",
+  "contact": {
+    "github": "example-dev",
+    "email": "dev@example.com"
+  },
+  "entity_id": "https://wiki.example.com/saml/metadata",
+  "acs_urls": [
+    "https://wiki.example.com/saml/acs"
+  ],
+  "subject_type": "public",
+  "status": "active"
+}

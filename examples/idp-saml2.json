@@ -1,0 +1,22 @@
+{
+  "$schema": "../schema/idp-saml2.schema.json",
+  "id": "example-saml",
+  "protocol": "saml2",
+  "name": {
+    "en": "Example University",
+    "zh": "示例大学"
+  },
+  "homepage": "https://example.edu/",
+  "contact": {
+    "github": "example-admin",
+    "email": "admin@example.edu"
+  },
+  "metadata_url": "https://idp.example.edu/idp/shibboleth",
+  "entity_id": "https://idp.example.edu/idp/shibboleth",
+  "sub_source": "urn:oasis:names:tc:SAML:attribute:subject-id",
+  "email_attribute_verified": true,
+  "email_domains": [
+    "example.edu"
+  ],
+  "status": "active"
+}

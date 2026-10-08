@@ -4,6 +4,7 @@
 export const C = {
   en: {
     nav_apps: "Apps",
+    pr_channel: "No account at a listed identity provider? Register by GitHub pull request",
     c_title: "Developer console", c_lead: "Register an application that signs people in with RoamID. Applications that pass the automated checks go live without manual review.",
     c_signin: "Sign in with RoamID", c_signin_expired: "The sign-in took too long. Sign in again.", c_signin_failed: "Sign-in failed. Sign in again.",
     c_how: "How it works",
@@ -79,6 +80,7 @@ export const C = {
   },
   zh: {
     nav_apps: "应用",
+    pr_channel: "没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记",
     c_title: "开发者控制台", c_lead: "登记使用 RoamID 登录的应用。通过自动检查的应用无需人工审核即可上线。",
     c_signin: "使用 RoamID 登录", c_signin_expired: "登录用时过长，请重新登录。", c_signin_failed: "登录失败，请重新登录。",
     c_how: "流程",

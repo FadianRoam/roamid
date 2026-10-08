@@ -3,7 +3,7 @@
 // forms; the same visual system as the rest of RoamID.
 
 import { t, localName } from "../ui/i18n.js";
-import { contentPage, esc, hiddenFields, icon } from "../ui/pages.js";
+import { contentPage, esc, hiddenFields, icon, REGISTRY_DOCS } from "../ui/pages.js";
 
 const STATUS_CLASS = { active: "ok", development: "warn", unverified: "warn", suspended: "bad", banned: "bad" };
 export const appStatus = (a) => (a.status === "active" && !a.domain_verified ? "unverified" : a.status);
@@ -30,6 +30,7 @@ export function consoleLanding(v, { msg } = {}) {
   const body = `<h1 class="title">${esc(t(v.lang, "c_title"))}</h1><p class="lead">${esc(t(v.lang, "c_lead"))}</p>
 ${msg ? notice(esc(t(v.lang, "c_signin_" + msg)), "warn") : ""}
 <div class="btnrow"><a class="pill" href="/console/login" id="console-signin">${esc(t(v.lang, "c_signin"))}</a><a class="pill ghost" href="/apps">${esc(t(v.lang, "apps_title"))}</a></div>
+<p class="lead"><a href="${esc(REGISTRY_DOCS[v.lang])}" id="pr-channel">${esc(t(v.lang, "pr_channel"))}</a></p>
 ${sec(t(v.lang, "c_how"), `<ol class="steps"><li>${esc(t(v.lang, "c_how1"))}</li><li>${esc(t(v.lang, "c_how2"))}</li><li>${esc(t(v.lang, "c_how3"))}</li><li>${esc(t(v.lang, "c_how4"))}</li></ol>`)}`;
   return page(v, t(v.lang, "c_title"), body);
 }

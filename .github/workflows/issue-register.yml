@@ -1,0 +1,39 @@
+name: issue-register
+
+# Registration issue forms -> pull requests (scripts/issue-register.mjs).
+# Runs on the base repository with main checked out. The issue body is read
+# from the event as data, validated, and only the resulting JSON entry is
+# committed to a bot branch; nothing from the issue is executed.
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: issue-register-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  register:
+    if: contains(github.event.issue.labels.*.name, 'registration')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Dependencies
+        run: npm ci --ignore-scripts
+      - name: Issue to pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/issue-register.mjs

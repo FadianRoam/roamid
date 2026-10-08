@@ -1,0 +1,49 @@
+name: Register an identity provider / 登记身份提供方
+description: Without git. A bot turns this form into a pull request; identity providers are reviewed by a maintainer. / 无需 git。机器人把表单转为拉取请求；身份提供方由维护者审核。
+title: "Register identity provider / 登记身份提供方"
+labels: [registration, identity-provider]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste any secret here. With `client_secret_*`, the secret is handed to the operator privately (SECURITY.md). Requirements: docs/idp-requirements.md.
+        不要在这里粘贴任何密钥。使用 `client_secret_*` 时，密钥经私下渠道交给运营方（SECURITY.md）。要求见 docs/idp-requirements.md。
+  - type: input
+    attributes: { label: "id", description: "a-z, 0-9, -; 2 to 32; permanent" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Name (English) / 名称（英文）" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Name (Chinese) / 名称（中文）" }
+  - type: dropdown
+    attributes: { label: "Protocol / 协议", options: [oidc, saml2] }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Homepage / 主页" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Issuer (OIDC)" }
+  - type: input
+    attributes: { label: "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID", value: roamid }
+  - type: dropdown
+    attributes: { label: "Client authentication (OIDC) / 客户端认证", options: [private_key_jwt, client_secret_basic, client_secret_post] }
+  - type: input
+    attributes: { label: "Scopes (OIDC)", value: "openid email profile" }
+  - type: input
+    attributes: { label: "Metadata URL (SAML) / 元数据地址" }
+  - type: input
+    attributes: { label: "Entity ID (SAML) / 实体 ID" }
+  - type: input
+    attributes: { label: "SSO URL, HTTP-Redirect (SAML)" }
+  - type: textarea
+    attributes: { label: "Signing certificate (SAML) / 签名证书", description: "Certificate only (public).", render: text }
+  - type: input
+    attributes: { label: "Subject source (SAML) / 主体标识来源", value: nameid }
+  - type: dropdown
+    attributes: { label: "Released email addresses are verified (SAML) / 发出的邮箱地址已验证", options: ["no", "yes"] }
+  - type: input
+    attributes: { label: "Email domains / 邮箱域名", description: "Space separated; each proven by DNS TXT _roamid.<domain>" }
+  - type: input
+    attributes: { label: "Contact email / 联系邮箱" }
+    validations: { required: true }

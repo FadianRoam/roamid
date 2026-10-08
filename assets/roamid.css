@@ -224,3 +224,7 @@ form.act{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}form.act input{fle
 .orbit-verify{margin-top:16px;min-height:10px}
 .scroll.gap{margin-top:12px}
 .form textarea.prose,form textarea.prose{font-family:var(--font);font-size:16px;line-height:1.5}
+.hero-note{display:block;margin-top:12px;max-width:31em;text-align:center;font-size:13.5px;line-height:1.4;color:var(--dim);letter-spacing:var(--tr-ui)}
+html.staged .hero-note{position:absolute;top:392px;left:0;right:0;margin:0 auto;max-width:640px}
+html.enter .hero-note{opacity:0}
+html.entering .hero-note{transition:opacity .8s .6s}

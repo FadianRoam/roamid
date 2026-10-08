@@ -9,6 +9,8 @@ RoamID is a community OpenID Connect broker. An application integrates RoamID on
 - Registry as published: https://fadianroam.github.io/roamid/registry.json
 - License: Apache-2.0
 
+No account at a listed identity provider? Register by GitHub pull request: [docs/registry.md](docs/registry.md#without-an-account-at-a-listed-identity-provider) (one-click templates, issue forms, `npm run new:app` / `npm run new:idp`).
+
 ## How it works
 
 RoamID is an OpenID Provider to applications and a relying party to community identity providers.

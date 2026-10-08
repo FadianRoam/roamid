@@ -59,8 +59,10 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
   if (pr.base.ref !== "main" || !pr.base.repo || pr.base.repo.full_name !== repo) return { reasons: ["only pull requests to main of this repository are merged automatically"], sha };
   if (!(pr.changed_files >= 1)) return { reasons: ["no files changed"], sha };
   if (pr.changed_files > maxFiles) return { reasons: [`${pr.changed_files} files: at most ${maxFiles} files are merged automatically`], sha };
-  const runs = await api(`/actions/runs?head_sha=${sha}&event=pull_request&per_page=20`);
-  const check = (runs.workflow_runs || []).filter((r) => r.name === "check").sort((a, b) => b.run_number - a.run_number)[0];
+  // The check run for this exact commit: from the pull_request event, or
+  // dispatched for a bot branch (only the repository can dispatch).
+  const runs = await api(`/actions/runs?head_sha=${sha}&per_page=20`);
+  const check = (runs.workflow_runs || []).filter((r) => r.name === "check" && (r.event === "pull_request" || r.event === "workflow_dispatch")).sort((a, b) => b.run_number - a.run_number)[0];
   if (!check || check.status !== "completed") return { wait: "the check workflow has not finished" };
   if (check.conclusion !== "success") reasons.push(`the check workflow ended with "${check.conclusion}"`);
   const files = await listFiles(api, pr.number);

@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema/client.schema.json",
+  "client_id": "example-portal",
+  "protocol": "oidc",
+  "name": {
+    "en": "Example Portal",
+    "zh": "示例门户"
+  },
+  "homepage": "https://example.com/",
+  "domain": "example.com",
+  "contact": {
+    "github": "example-dev",
+    "email": "dev@example.com"
+  },
+  "redirect_uris": [
+    "https://portal.example.com/auth/callback"
+  ],
+  "post_logout_redirect_uris": [
+    "https://portal.example.com/"
+  ],
+  "token_endpoint_auth_method": "private_key_jwt",
+  "jwks_uri": "https://portal.example.com/.well-known/jwks.json",
+  "subject_type": "public",
+  "status": "active"
+}

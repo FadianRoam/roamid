@@ -1,0 +1,26 @@
+{
+  "$schema": "../schema/idp.schema.json",
+  "id": "example",
+  "protocol": "oidc",
+  "name": {
+    "en": "Example Community",
+    "zh": "示例社区"
+  },
+  "issuer": "https://login.example.org/realms/main",
+  "homepage": "https://example.org/",
+  "contact": {
+    "github": "example-admin",
+    "email": "admin@example.org"
+  },
+  "client_id": "roamid",
+  "client_auth": "private_key_jwt",
+  "scopes": [
+    "openid",
+    "email",
+    "profile"
+  ],
+  "email_domains": [
+    "example.org"
+  ],
+  "status": "active"
+}

@@ -20,7 +20,7 @@ function gh({ files, pr: prOver = {}, conclusion = "success", headLater } = {}) 
     calls.push([opt.method || "GET", path]);
     if (path === "/pulls/7") { prReads++; return headLater ? { ...pr, head: { sha: headLater } } : pr; }
     if (path.startsWith("/pulls?")) return [pr];
-    if (path.startsWith("/actions/runs")) return { workflow_runs: [{ name: "check", run_number: 3, status: "completed", conclusion }] };
+    if (path.startsWith("/actions/runs")) return { workflow_runs: [{ name: "check", event: "pull_request", run_number: 3, status: "completed", conclusion }] };
     const m = /^\/pulls\/7\/files\?per_page=100&page=(\d+)$/.exec(path);
     if (m) { const p = Number(m[1]); return files.slice((p - 1) * 100, p * 100).map((f) => ({ filename: f.filename, status: f.status || "added" })); }
     if (path.startsWith("/contents/")) { const f = files.find((x) => path.startsWith(`/contents/${x.filename}?`)); return { content: b64(f.content) }; }
