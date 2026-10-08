@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schema/idp-saml2.schema.json",
+  "id": "interop-kc",
+  "protocol": "saml2",
+  "name": {
+    "en": "Interoperability test: Keycloak",
+    "zh": "互通测试：Keycloak"
+  },
+  "homepage": "https://www.keycloak.org/",
+  "contact": {
+    "github": "yunzheng2006",
+    "email": "support@yunzheng.space"
+  },
+  "entity_id": "https://localhost:8444/realms/interop-idp",
+  "sso_url": "https://localhost:8444/realms/interop-idp/protocol/saml",
+  "certs": [
+    "MIICpTCCAY0CBgGhG05/6zANBgkqhkiG9w0BAQsFADAWMRQwEgYDVQQDDAtpbnRlcm9wLWlkcDAeFw0yNjEwMDgxMTM2MzFaFw0zNjEwMDgxMTM4MTFaMBYxFDASBgNVBAMMC2ludGVyb3AtaWRwMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjynrmmDBRcQTeDE/36dPIuoT2k8DvnYhmvSlUGXxZdiXbqYXjLETQof87BMdixu+X8T9jh/MVVTjGN03qmwlln43rsrcvUNFeAzvhv4MBl7ofVTg4fVqlUzxi5cVAcE0abMsd2vpICnNnmBdFIEKK157IUUZzLwEyY/lBa+WPjta1pGXuYg7Pi0jGOsY8ynh6IPW4lK7HqALOfeujZt/jS+XejDOQJLj/29d4UI97c1bsiOdyoAW0jIz5cuwVEs7d77/JsbXpp0Npk9dLhR2RjavwYj8CDDEo9UgWblIoH5vaZY6THc7swB0ADT1aatk9uUXasbmm9FqkoG33/sCfQIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQANa382iK1tlb2Z2Jhk8RNWWkTwNU6bGEb99xnP3xyA987QDJrcBd4gwIXzj1CVNM+Q0tBVraEkOhHuqm2q6ijuDz20Ev6uiqjXzht4yRk2ZMqZQBMBZOnVrCY1+UkC6jf3Ovm1dZ3qrFDdd/DMZwmqp9V5YIUNj/2OjmYm+rBhA2Zveedlz+ZzsgeuAUOMus2B7HyT4jX7sKUkfpWcWpEnUo+Uy+zNFgf+hMykPIXjBibspJlY3o6uJYo/epJgXJJNA5xxesTGWSaOV6lDjp3/lxgRz/4OdruWdXkR0Uqjr9aIwwotcY9UQWN98uOqmFE25BdFFLaViXc0RzZyrZeY"
+  ],
+  "sub_source": "nameid",
+  "email_attribute_verified": false,
+  "note": "Operator test entry: a Keycloak container on the tester's own machine as SAML identity provider, used to test SAML interoperability.",
+  "status": "active"
+}
