@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schema/client.schema.json",
+  "client_id": "qa-iss-ec3d7c",
+  "protocol": "oidc",
+  "name": {
+    "en": "Issue Path Check ec3d7c"
+  },
+  "homepage": "https://qa-iss-ec3d7c.fadianro.am/",
+  "domain": "qa-iss-ec3d7c.fadianro.am",
+  "contact": {
+    "github": "yunzheng2006",
+    "email": "support@yunzheng.space"
+  },
+  "redirect_uris": [
+    "https://qa-iss-ec3d7c.fadianro.am/cb"
+  ],
+  "token_endpoint_auth_method": "none",
+  "subject_type": "public",
+  "status": "active"
+}
