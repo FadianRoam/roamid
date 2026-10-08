@@ -7,6 +7,7 @@
     "domain": "qa-tp-7982cc.fadianro.am",
     "category": "phishing",
     "decision": "suspend",
-    "reason": "QA test: imitation of a login page (test entry)"
+    "reason": "QA test: imitation of a login page (test entry)",
+    "withdrawn": "test entry from the QA verification, not a real decision"
   }
 ]
