@@ -36,28 +36,32 @@ export function corsPreflight() {
   return new Response(null, { status: 204, headers: withBase(CORS) });
 }
 
-// A per-response nonce for inline <style> and <script>.
+// Kept for callers that still pass one; pages no longer use inline code.
 export function newNonce() {
   return randomToken(16);
 }
 
-export function csp(nonce) {
-  return [
-    "default-src 'none'",
-    `script-src 'nonce-${nonce}'`,
-    `style-src 'nonce-${nonce}'`,
-    "img-src 'self' data:",
-    "connect-src 'self'",
-    "form-action 'self' https:",
-    "base-uri 'none'",
-    "frame-ancestors 'none'",
-  ].join("; ");
-}
+// Same-origin only: every script, style, font, image and video is a file on
+// this origin. form-action allows https because the picker's POST answers
+// with a redirect to the identity provider.
+export const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "media-src 'self'",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "form-action 'self' https:",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
 
 // HTML pages are personal (language, theme, remembered choice): never cached
 // by a shared cache.
-export function html(body, { status = 200, nonce, headers = {}, cookies = [] } = {}) {
-  const h = withBase({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": csp(nonce), ...headers });
+export function html(body, { status = 200, headers = {}, cookies = [] } = {}) {
+  const h = withBase({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": CSP, ...headers });
   for (const c of cookies) h.append("Set-Cookie", c);
   return new Response(body, { status, headers: h });
 }

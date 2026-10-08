@@ -30,7 +30,9 @@ jobs:
         with:
           node-version: 24
       - name: Tests
-        run: node --test test/*.test.mjs
+        run: |
+          node scripts/build-assets.mjs --check
+          node --test test/*.test.mjs
       - name: Registry
         run: |
           if git rev-parse -q --verify HEAD~1 >/dev/null; then base="--base HEAD~1"; else base=""; fi

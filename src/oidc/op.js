@@ -222,7 +222,7 @@ export async function select(request, env) {
   }
   const v = view(request, { uiLocales: tx.ui_locales });
   const health = await healthMap(env);
-  return html(pickerPage({ ...v, lang, tx: tx.id, client, idps: allowed, last: getCookie(request, LAST_COOKIE), cancelUrl: rpError(env, tx, "access_denied", "the user cancelled"), health }), { nonce: v.nonce });
+  return html(pickerPage({ ...v, lang, tx: tx.id, client, redirectUri: tx.redirect_uri, idps: allowed, last: getCookie(request, LAST_COOKIE), cancelUrl: rpError(env, tx, "access_denied", "the user cancelled"), health }));
 }
 
 export async function healthMap(env) {

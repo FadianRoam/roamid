@@ -5,3 +5,4 @@ wrangler.local.toml
 _site/
 *.local.*
 .DS_Store
+public/

@@ -23,6 +23,8 @@ jobs:
         with:
           node-version: 24
       - name: Tests
-        run: node --test test/*.test.mjs
+        run: |
+          node scripts/build-assets.mjs --check
+          node --test test/*.test.mjs
       - name: Registry
         run: node scripts/check.mjs --base "origin/${{ github.base_ref }}" --probe --summary "$GITHUB_STEP_SUMMARY"

@@ -17,6 +17,14 @@ routes = [
   { pattern = "<origin hostname>", custom_domain = true },
 ]
 
+# Static assets (fonts, CSS, JavaScript, the band video), content-hashed by
+# scripts/build-assets.mjs into public/, served before the Worker runs.
+[build]
+command = "node scripts/build-assets.mjs"
+
+[assets]
+directory = "public"
+
 [vars]
 BASE_URL = "https://<public hostname>"
 REGISTRY_URL = "https://fadianroam.github.io/roamid/registry.json"

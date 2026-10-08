@@ -103,7 +103,10 @@ export async function handle(request, env, ctx) {
   }
   if (p === "/status.json") return json(await statusData(env), { cors: true });
   const v = view(request);
-  if (p === "/") return html(homePage({ ...v, base: env.BASE_URL }), { nonce: v.nonce });
+  if (p === "/") {
+    const reg = await getRegistry(env);
+    return html(homePage({ ...v, idps: [...reg.idps.values()].filter((i) => i.status === "active"), health: await healthMap(env) }));
+  }
   if (p === "/idps") {
     const reg = await getRegistry(env);
     return html(idpsPage({ ...v, idps: [...reg.idps.values()], health: await healthMap(env) }), { nonce: v.nonce });
