@@ -5,7 +5,9 @@
 
 export const fixtureCount = (env, url) => {
   if (!env || env.FIXTURES !== "1") return null;
-  const n = Number(url.searchParams.get(url.pathname === "/fixture/picker" ? "n" : "fixture"));
+  const key = url.pathname === "/fixture/picker" ? "n" : "fixture";
+  if (!url.searchParams.has(key)) return null;
+  const n = Number(url.searchParams.get(key));
   return Number.isInteger(n) && n >= 0 && n <= 500 ? n : null;
 };
 

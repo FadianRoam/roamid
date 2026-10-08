@@ -152,11 +152,11 @@ code.secret { display: block; padding: 10px 12px; border-radius: 6px; background
 .search input[type=search] { border: 0; padding: 9px 0; background: transparent; outline: none; }
 .search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .count { margin: 6px 0; font-size: 14px; color: var(--muted); }
-.logo { display: inline-flex; align-items: center; justify-content: center; flex: none; margin-left: auto; }
-.logo img { display: block; max-height: 28px; width: auto; object-fit: contain; }
+.logo { display: inline-flex; align-items: center; justify-content: flex-end; flex: none; width: 56px; height: 28px; margin-left: auto; }
+.logo img { display: block; height: 28px; width: auto; max-width: 56px; object-fit: contain; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo img { background: #f4f4f4; border-radius: 6px; padding: 2px; } }
 :root[data-theme="dark"] .logo img { background: #f4f4f4; border-radius: 6px; padding: 2px; }
-.logo.tile { width: 28px; height: 28px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); color: var(--accent); font-weight: 700; font-size: 14px; }
+.logo .tile { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); color: var(--accent); font-weight: 700; font-size: 14px; }
 .empty { padding: 14px 0; color: var(--muted); }
 
 /* the picker */
