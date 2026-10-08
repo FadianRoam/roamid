@@ -43,9 +43,10 @@ function nav({ lang, theme, path, active }) {
   const a = ([h, l, k]) => `<a href="${esc(h)}"${active === k ? ' aria-current="page"' : ""}>${esc(l)}</a>`;
   const next = NEXT_THEME[theme];
   const themeLabel = t(lang, "theme_next", { cur: t(lang, "theme_" + theme), next: t(lang, "theme_" + next) });
-  // The language link: the other language's URL of this page (and the cookie, for sign-in flows).
-  const twin = localPath(other, String(path || "/").replace(/^\/zh(?=\/|$|\?)/, "") || "/");
-  const langLink = prefLink("lang", other, twin);
+  // The language link: the other language's URL of this page. Pages without
+  // a twin (sign-in flows, console) switch through /prefs, which sets the cookie.
+  const inner = String(path || "/").replace(/^\/zh(?=\/|$|\?)/, "") || "/";
+  const langLink = isTwinPath(inner.split("?")[0]) ? localPath(other, inner) : prefLink("lang", other, inner);
   return `<nav class="nav" aria-label="RoamID">
 <a class="brand" href="${esc(L("/"))}">${MARK}<span>RoamID</span></a>
 <div class="links">${links.map(a).join("")}</div>
@@ -97,7 +98,7 @@ export const baseStylesheet = (replaced) => (replaced ? "" : `<link rel="stylesh
 export function footer(lang) {
   const L = (h) => localPath(lang, h);
   return `<footer class="foot"><nav class="foot-links" aria-label="${esc(t(lang, "footer_nav"))}"><a href="${esc(L("/"))}">RoamID</a><a href="${esc(L("/idps"))}">${esc(t(lang, "nav_idps"))}</a><a href="${esc(L("/status"))}">${esc(t(lang, "nav_status"))}</a><a href="${esc(L("/apps"))}">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="${esc(L("/report"))}">${esc(t(lang, "rep_title"))}</a><a href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></nav>
-<p class="powered"><a href="https://yunzheng.space/"><span>${esc(t(lang, "powered_by"))}</span><picture><source srcset="${ASSETS["lab-logo.webp"]}" type="image/webp"><img src="${ASSETS["lab-logo.png"]}" width="72" height="32" alt="YunZheng LAB" loading="lazy" decoding="async"></picture></a></p></footer>`;
+<p class="powered"><a href="https://yunzheng.space/">${t(lang, "powered_pre") ? `<span>${esc(t(lang, "powered_pre"))}</span>` : ""}<picture><source srcset="${ASSETS["lab-logo.webp"]}" type="image/webp"><img src="${ASSETS["lab-logo.png"]}" width="72" height="32" alt="YunZheng LAB" loading="lazy" decoding="async"></picture>${t(lang, "powered_post") ? `<span>${esc(t(lang, "powered_post"))}</span>` : ""}</a></p></footer>`;
 }
 
 export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "", description = "", noindex = false, status = 200, isError = false, data = null }) {
@@ -118,14 +119,16 @@ ${hero({ lang, h1: `${t(lang, "hero_l1")} ${t(lang, "hero_l2")}`, sub: t(lang, "
 
 // ---- the identity provider picker ---------------------------------------------
 
-// A provider's logo (served from /logos/) or a monogram tile.
-function logoTile(i, lang, { lazy = true, size = 28 } = {}) {
+// A provider's logo (served from /logos/) or a monogram tile, in a fixed
+// 56x28 box: the width and height attributes follow the logo's aspect from
+// the registry (at most 2:1), so nothing moves when it loads.
+export function logoTile(i, lang, { lazy = true, size = 28 } = {}) {
   const name = localName(i, lang);
-  if (i.logo && i.logo.path) {
-    const w = i.logo.width >= i.logo.height ? size * Math.min(2, i.logo.width / i.logo.height) : size;
-    return `<span class="logo"><img src="/logos/${esc(i.logo.path)}" width="${Math.round(w)}" height="${size}" alt="${esc(t(lang, "logo_of", { name }))}"${lazy ? ' loading="lazy"' : ""} decoding="async"></span>`;
+  if (i.logo && i.logo.path && i.logo.width > 0 && i.logo.height > 0) {
+    const w = Math.round(size * Math.min(2, Math.max(1 / 2, i.logo.width / i.logo.height)));
+    return `<span class="logo"><img src="/logos/${esc(i.logo.path)}" width="${w}" height="${size}" alt="${esc(t(lang, "logo_of", { name }))}"${lazy ? ' loading="lazy"' : ""} decoding="async"></span>`;
   }
-  return `<span class="logo tile" aria-hidden="true">${esc([...name.trim()][0] || "?")}</span>`;
+  return `<span class="logo" aria-hidden="true"><span class="tile">${esc([...name.trim()][0] || "?")}</span></span>`;
 }
 
 export function pickerPage({ lang, theme, path, tx, client, redirectUri, idps, last, hint = null, cancelUrl, health = {}, showAll = false }) {
@@ -191,7 +194,7 @@ export function healthBadge(lang, idp, h) {
   return `<span class="badge ${cls}"><span class="dot ${dotClass(h)}"></span>${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}</span>`;
 }
 
-export function idpsPage({ lang, theme, idps, health = {}, added = {}, sort = "name", fixture = null }) {
+export function idpsPage({ lang, theme, path = "/idps", idps, health = {}, added = {}, sort = "name", fixture = null }) {
   const by = ["name", "added", "status"].includes(sort) ? sort : "name";
   const sorted = sortIdps(idps, { by, lang, health, added });
   const rank = { up: 0, degraded: 1, unknown: 2, down: 3, disabled: 4 };
@@ -218,7 +221,7 @@ ${logoTile(i, lang)}${sub ? `\n<span class="sub">${sub}</span>` : ""}
 <p class="empty none" hidden>${esc(t(lang, "pick_none"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></p>
 ${sorted.length ? "" : `<p class="empty">${esc(t(lang, "pick_none"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></p>`}
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
-  return contentPage({ lang, theme, path: localPath(lang, "/idps"), active: "idps", title: t(lang, "idps_title"), description: t(lang, "idps_lead"), data: { idps: sorted }, body });
+  return contentPage({ lang, theme, path: localPath(lang, path), active: "idps", title: t(lang, "idps_title"), description: t(lang, "idps_lead"), data: { idps: sorted }, body });
 }
 
 function age(lang, secs) {

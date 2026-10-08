@@ -31,7 +31,9 @@ test("language routes: /x English, /zh/x Chinese; variants answer 301 with the c
   // Links on a Chinese page stay in Chinese.
   const zhHtml = await (await get(h, "/zh/status")).text();
   assert.match(zhHtml, /href="\/zh\/idps"/);
-  assert.match(zhHtml, /class="tool lang-switch" href="\/prefs\?lang=en&amp;next=%2Fstatus"/);
+  assert.match(zhHtml, /class="tool lang-switch" href="\/status"/, "the language switch links to the twin URL");
+  assert.match(await (await get(h, "/idps?sort=added")).text(), /class="tool lang-switch" href="\/zh\/idps\?sort=added"/);
+  assert.match(await (await get(h, "/")).text(), /class="tool lang-switch" href="\/zh\/"/);
 });
 
 test("every page has the footer with Powered by YunZheng LAB; non-public pages are noindex; every response has x-roamid-build", async () => {
@@ -39,7 +41,7 @@ test("every page has the footer with Powered by YunZheng LAB; non-public pages a
   for (const path of ["/", "/zh/", "/idps", "/zh/idps", "/apps", "/status", "/demo", "/report", "/test", "/console", "/nothing"]) {
     const r = await get(h, path);
     const html = await r.text();
-    assert.match(html, /<p class="powered"><a href="https:\/\/yunzheng\.space\/"><span>(Powered by|技术支持)<\/span><picture><source srcset="\/assets\/lab-logo\.[0-9a-f]+\.webp" type="image\/webp"><img src="\/assets\/lab-logo\.[0-9a-f]+\.png" width="72" height="32" alt="YunZheng LAB" loading="lazy"/, path);
+    assert.match(html, /<p class="powered"><a href="https:\/\/yunzheng\.space\/">(<span>Powered by<\/span>|<span>由<\/span>)<picture><source srcset="\/assets\/lab-logo\.[0-9a-f]+\.webp" type="image\/webp"><img src="\/assets\/lab-logo\.[0-9a-f]+\.png" width="72" height="32" alt="YunZheng LAB" loading="lazy"/, path);
     assert.equal(r.headers.get("x-roamid-build"), "public", path);
     const noindex = /<meta name="robots" content="noindex">/.test(html);
     assert.equal(noindex, ["/report", "/test", "/console", "/nothing"].includes(path), `${path} noindex`);
@@ -94,6 +96,7 @@ test("fixtures: only where FIXTURES=1; the picker and /idps render 500 providers
   assert.doesNotMatch(await (await get(h, "/idps?fixture=500")).text(), /fx-499/, "production ignores ?fixture");
   assert.equal((await get(h, "/fixture/picker?n=500")).status, 404);
   h.env.FIXTURES = "1";
+  assert.doesNotMatch(await (await get(h, "/idps")).text(), /fx-000/, "without ?fixture= the real registry");
   const t0 = performance.now();
   const page = await (await get(h, "/fixture/picker?n=500")).text();
   const ms = performance.now() - t0;
@@ -101,7 +104,7 @@ test("fixtures: only where FIXTURES=1; the picker and /idps render 500 providers
   assert.equal((page.match(/data-more hidden/g) || []).length, 494);
   assert.match(page, /id="show-all" role="button" aria-controls="idp-list" aria-expanded="false"/);
   assert.match(page, /role="combobox" aria-controls="idp-list"/);
-  assert.match(page, /<span class="logo tile" aria-hidden="true">/, "monogram when there is no logo");
+  assert.match(page, /<span class="logo" aria-hidden="true"><span class="tile">/, "monogram when there is no logo");
   assert.match(page, /<img src="\/logos\/fx\.00000000\.png" width="28" height="28" alt="[^"]+" loading="lazy"/);
   assert.ok(ms < 500, `server render ${ms.toFixed(0)} ms`);
   const idps = await (await get(h, "/idps?fixture=500")).text();
@@ -124,4 +127,16 @@ test("/status shows the build marker of the platform module", async () => {
   const h = await setup();
   assert.match(await (await h.request("/status")).text(), /<code id="build">public<\/code>/);
   assert.equal((await (await h.request("/status.json")).json()).build, "public");
+});
+
+test("logos keep their aspect in a fixed box; the footer reads Powered by / 由 … 提供支持", async () => {
+  const { logoTile } = await import("../src/ui/pages.js");
+  const wide = logoTile({ id: "y", name: { en: "Wide" }, logo: { path: "y.0123abcd.webp", width: 352, height: 156 } }, "en");
+  assert.match(wide, /width="56" height="28"/, "352x156 at 28 px high, capped at 2:1");
+  assert.match(logoTile({ id: "s", name: { en: "Square" }, logo: { path: "s.0123abcd.png", width: 256, height: 256 } }, "en"), /width="28" height="28"/);
+  assert.match(logoTile({ id: "r", name: { en: "Ratio" }, logo: { path: "r.0123abcd.png", width: 300, height: 200 } }, "en"), /width="42" height="28"/);
+  assert.match(logoTile({ id: "m", name: { en: "Mono" } }, "en"), /<span class="tile">M<\/span>/);
+  const h = await setup();
+  assert.match(await (await h.request("/zh/")).text(), /<span>由<\/span><picture>.*alt="YunZheng LAB".*<\/picture><span>提供支持<\/span><\/a>/s);
+  assert.match(await (await h.request("/")).text(), /<span>Powered by<\/span><picture>.*<\/picture><\/a>/s);
 });
