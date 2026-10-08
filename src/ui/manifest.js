@@ -4,7 +4,7 @@ export const ASSETS = {
   "lab-logo.webp": "/assets/lab-logo.ba14295660.webp",
   "lab-logo.png": "/assets/lab-logo.d386408f65.png",
   "roamid.js": "/assets/roamid.e6658cd382.js",
-  "roamid.css": "/assets/roamid.5e7c1fdae7.css"
+  "roamid.css": "/assets/roamid.701438892c.css"
 };
 // Byte sizes of the files served with ranges (the assets binding streams without Content-Length).
 export const SIZES = {};

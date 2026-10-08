@@ -192,7 +192,9 @@ code.secret { display: block; padding: 10px 12px; border-radius: 6px; background
 .group > summary h2 { display: inline; font-size: 18px; margin: 0; }
 .gn { color: var(--muted); font-weight: 400; font-size: 15px; }
 .idlist { list-style: none; margin: 8px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
-.idrow { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr) 9.5em 4.5em auto; grid-template-areas: "main host st proto logo" "sub sub sub sub sub"; align-items: center; gap: 2px 16px; padding: 10px 14px; min-height: 56px; content-visibility: auto; contain-intrinsic-size: auto 60px; }
+.idrow { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr) 9.5em 4.5em auto; grid-template-areas: "main host st proto logo" "sub sub sub sub sub"; align-items: center; gap: 2px 16px; padding: 10px 14px; min-height: 56px; content-visibility: auto; contain-intrinsic-size: auto 72px; }
+/* The first rows of each group render at once (no size estimate in view). */
+.idlist .idrow:nth-child(-n+12) { content-visibility: visible; }
 .idrow + .idrow { border-top: 1px solid var(--line); }
 .idrow .main { grid-area: main; display: flex; flex-direction: column; min-width: 0; }
 .idrow .nm, .idrow .host, .idrow .idt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -204,6 +206,6 @@ code.secret { display: block; padding: 10px 12px; border-radius: 6px; background
 .idrow .logo { grid-area: logo; justify-self: end; }
 .idrow .sub { grid-area: sub; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
 @media (max-width: 760px) {
-  .idrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main logo" "host host" "st proto" "sub sub"; gap: 4px 12px; }
+  .idrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main logo" "host host" "st proto" "sub sub"; gap: 4px 12px; contain-intrinsic-size: auto 140px; }
   .idrow .proto { justify-self: end; }
 }
