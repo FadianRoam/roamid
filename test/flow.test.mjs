@@ -258,7 +258,7 @@ test("discovery document and public pages", async () => {
   for (const p of ["/", "/idps", "/status", "/demo"]) {
     const res = await h.request(p, { headers: { "Accept-Language": "zh-CN,zh;q=0.9" } });
     assert.equal(res.status, 200, p);
-    assert.equal(res.headers.get("Cache-Control"), "no-store", p);
+    assert.match(res.headers.get("Cache-Control"), /^no-store/, p);
     assert.match(await res.text(), /lang="zh-CN"/, p);
   }
   const dark = await h.request("/prefs?theme=dark&next=/idps");

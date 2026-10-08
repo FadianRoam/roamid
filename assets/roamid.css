@@ -184,3 +184,5 @@ html.entering .card{transition:translate .9s cubic-bezier(.2,.8,.2,1) .65s,opaci
 @media (prefers-reduced-motion:reduce){html.enter *{opacity:1!important;translate:none!important;clip-path:none!important}}
 .search .ph{flex:1;color:var(--muted);font-size:calc(17 * var(--dp));letter-spacing:var(--tr-ui);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actions .pill.demo{pointer-events:none}
+html[lang^=zh] .display{font-size:clamp(28px,7.4vw,55.7px)}
+html.staged[lang^=zh] .display{font-size:55.7px}

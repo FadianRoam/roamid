@@ -61,7 +61,8 @@ export const CSP = [
 // HTML pages are personal (language, theme, remembered choice): never cached
 // by a shared cache.
 export function html(body, { status = 200, headers = {}, cookies = [] } = {}) {
-  const h = withBase({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": CSP, ...headers });
+  // no-transform: the CDN must not inject scripts (analytics beacons) into pages.
+  const h = withBase({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform", "Content-Security-Policy": CSP, ...headers });
   for (const c of cookies) h.append("Set-Cookie", c);
   return new Response(body, { status, headers: h });
 }
