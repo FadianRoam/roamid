@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schema/idp.schema.json",
+  "id": "qa-idp-co",
+  "protocol": "oidc",
+  "name": {
+    "en": "QA Code Owner Check"
+  },
+  "issuer": "https://login.example.org",
+  "homepage": "https://example.org/",
+  "contact": {
+    "github": "yunzheng2006",
+    "email": "support@yunzheng.space"
+  },
+  "client_id": "roamid",
+  "client_auth": "private_key_jwt",
+  "scopes": [
+    "openid",
+    "email",
+    "profile"
+  ],
+  "status": "active"
+}
