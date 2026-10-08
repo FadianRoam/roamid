@@ -81,9 +81,9 @@ if (probe) {
   const changedClients = clients.filter((c) => beforeClients.get(c.client_id) !== JSON.stringify(c));
   if (changedClients.length) {
     report.push("", "Automated application review (automatic merge needs every application to pass):");
-    for (const r of await reviewClients(changedClients, head)) {
-      report.push(r.errors.length ? `- ${r.id}: not eligible: ${r.errors.map((e) => `${e.field}: ${e.message}`).join("; ")}` : `- ${r.id}: ${r.note || "passed, domain proven"}`);
-    }
+    const rv = await reviewClients(changedClients, head);
+    if (rv.temporary) report.push(`- the review could not complete: ${rv.reason}`);
+    else for (const r of rv.results) report.push(r.errors.length ? `- ${r.id}: not eligible: ${r.errors.map((e) => `${e.field}: ${e.message}`).join("; ")}` : `- ${r.id}: passed${r.status === "active" ? ", domain proven" : ""}`);
   }
 }
 

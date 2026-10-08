@@ -78,16 +78,27 @@ export async function checkAppDomain(env, row) {
   return p;
 }
 
+// The block lists have loaded at least once (fail closed: until then no
+// application becomes active).
+export async function listsReady(env) {
+  try {
+    const { results } = await env.DB.prepare("SELECT source, entries, last_error FROM blocklists").all();
+    const ok = new Set((results || []).filter((r) => r.last_error === null || r.entries > 0).map((r) => r.source));
+    return Object.keys(BLOCKLISTS).every((s) => ok.has(s));
+  } catch { return false; }
+}
+
 export async function settleStatus(env, row) {
   if (!row || row.status === "suspended" || row.status === "banned") return row && row.status;
   const entry = appEntry(row);
-  const want = !needsDevelopment(entry) && entry.app.domain_verified ? "active" : "development";
+  const ready = await listsReady(env);
+  const want = !needsDevelopment(entry) && entry.app.domain_verified && ready ? "active" : "development";
   if (want !== row.status) {
     const t = now();
     await env.DB.prepare("UPDATE apps SET status = ?, active_since = COALESCE(active_since, ?), updated_at = ? WHERE client_id = ?")
       .bind(want, want === "active" ? t : null, t, row.client_id).run();
     await env.DB.prepare("INSERT INTO audit (at, actor, target_kind, target_id, action, reason) VALUES (?, 'system', 'app', ?, ?, ?)")
-      .bind(t, row.client_id, want === "active" ? "activated" : "development", want === "active" ? "automated checks passed and the domain is proven" : (needsDevelopment(entry) ? "a callback is on localhost" : "the domain proof is missing")).run();
+      .bind(t, row.client_id, want === "active" ? "activated" : "development", want === "active" ? "automated checks passed and the domain is proven" : (needsDevelopment(entry) ? "a callback is on localhost" : !entry.app.domain_verified ? "the domain proof is missing" : "the block lists are not loaded yet")).run();
   }
   return want;
 }

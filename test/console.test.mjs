@@ -50,7 +50,7 @@ async function csrfOf(h, path = "/console") {
 
 async function post(h, path, fields, csrf) {
   const b = new URLSearchParams({ csrf: csrf ?? (await csrfOf(h)), ...fields });
-  return h.request(path, { method: "POST", body: b.toString(), headers: { Origin: BASE } });
+  return h.request(path, { method: "POST", body: b.toString(), headers: { Origin: "null", "Sec-Fetch-Site": "same-origin" } });
 }
 
 const appFields = (o = {}) => ({ name_en: "Example Portal", name_zh: "示例门户", domain: "example.org", homepage: "https://example.org/", protocol: "oidc", redirect_uris: "https://app.example.org/cb", auth_method: "client_secret_basic", subject_type: "public", ...o });
@@ -123,6 +123,11 @@ test("console: sign in with RoamID, create an app, prove the domain, active; sec
   // A post without the CSRF token is refused.
   const bad = await h.request("/console/new", { method: "POST", body: new URLSearchParams(appFields()).toString(), headers: { Origin: BASE } });
   assert.equal(bad.status, 400);
+  const csrf0 = await csrfOf(h);
+  const cross = await h.request("/console/new", { method: "POST", body: new URLSearchParams({ ...appFields(), csrf: csrf0 }).toString(), headers: { Origin: "null", "Sec-Fetch-Site": "cross-site" } });
+  assert.equal(cross.status, 400, "a cross-site post is refused even with the token");
+  const noHdr = await h.request("/console/new", { method: "POST", body: new URLSearchParams({ ...appFields(), csrf: csrf0 }).toString(), headers: { Origin: "https://evil.example" } });
+  assert.equal(noHdr.status, 400, "a foreign Origin is refused");
   const c = await createApp(h);
   assert.equal(c.r.status, 200, c.body.slice(0, 500));
   assert.ok(c.id && c.secret, "client_id and a secret shown once");
@@ -325,4 +330,27 @@ test("limits: domain proof lost past 72 hours, new-app daily cap, applications p
   await consoleLogin(h, USERS.alice);
   for (let i = 0; i < 9; i++) await h.db.prepare("INSERT INTO apps (client_id, protocol, name_en, domain, homepage, config, status, created_by, created_at, updated_at) VALUES (?, 'oidc', ?, 'x.org', 'https://x.org/', '{}', 'development', ?, ?, ?)").bind(`app-fill${i}000`, `Fill ${i}`, await publicSub(USERS.alice), t, t).run();
   assert.match((await createApp(h, { name_en: "Eleventh App", domain: "eleven.org", homepage: "https://eleven.org/", redirect_uris: "https://eleven.org/cb" })).body, /cap_creator/);
+});
+
+test("fail closed: no application becomes active before the block lists have loaded", async () => {
+  const h = await consoleSetup();
+  await h.db.prepare("DELETE FROM blocklists").run();
+  await consoleLogin(h, USERS.alice);
+  const c = await createApp(h);
+  h.txt["_roamid-app.example.org"] = [`roamid-app=${c.id}`];
+  await post(h, `/console/app/${c.id}/check`, {});
+  assert.equal((await h.db.prepare("SELECT status FROM apps WHERE client_id = ?").bind(c.id).first()).status, "development");
+  const { refreshBlocklists } = await import("../src/apps/review.js");
+  await refreshBlocklists(h.env, { force: true });
+  await post(h, `/console/app/${c.id}/check`, {});
+  assert.equal((await h.db.prepare("SELECT status FROM apps WHERE client_id = ?").bind(c.id).first()).status, "active");
+});
+
+test("block list: a listed host refuses the application", async () => {
+  const h = await consoleSetup();
+  h.blocklist["urlhaus.abuse.ch"] = "127.0.0.1\tapp.example.org\n";
+  const { refreshBlocklists, resetListMemo } = await import("../src/apps/review.js");
+  await refreshBlocklists(h.env, { force: true }); resetListMemo();
+  await consoleLogin(h, USERS.alice);
+  assert.match((await createApp(h)).body, /data-code="reputation"/);
 });

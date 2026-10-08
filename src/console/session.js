@@ -59,12 +59,14 @@ export async function logoutSession(request, env) {
 // A state-changing form post: same origin, a session, and its CSRF token.
 export async function readPost(request, env, session) {
   if (request.method !== "POST" || !session) return null;
+  // Pages send Referrer-Policy: no-referrer, so a browser's form post carries
+  // "Origin: null"; Sec-Fetch-Site then decides. Without Sec-Fetch-Site the
+  // Origin must be this site.
   const origin = request.headers.get("Origin");
-  if (origin && origin !== new URL(env.BASE_URL).origin) return null;
   const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") return null;
+  if (site ? site !== "same-origin" : origin !== new URL(env.BASE_URL).origin) { console.warn("[console] post refused:", site || "-", origin || "-"); return null; }
   const f = await readForm(request);
-  if (!f || !f.get("csrf") || !safeEqual(f.get("csrf"), session.csrf)) return null;
+  if (!f || !f.get("csrf") || !safeEqual(f.get("csrf"), session.csrf)) { console.warn("[console] post refused: csrf", !!f, f && !!f.get("csrf")); return null; }
   return f;
 }
 
