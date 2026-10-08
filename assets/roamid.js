@@ -1,8 +1,6 @@
-// RoamID pages: menu, stage scaling, entrance, band video, picker, demo.
+// RoamID pages: menu, lists of identity providers, SAML auto-post, demo.
 (function () {
   "use strict";
-  var d = document.documentElement;
-  var reduce = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)); };
 
@@ -15,85 +13,116 @@
     document.addEventListener("click", function (e) { if (m.open && !m.contains(e.target)) m.open = false; });
   });
 
-  // ---- 1290x860 design stage, scaled to fit; the grid flow below 940 px,
-  // and on the picker whenever scaling would make the input smaller than 16 px.
-  var hero = $(".hero");
-  if (hero) {
-    var picker = hero.getAttribute("data-page") === "picker";
-    var fit = function () {
-      var W = d.clientWidth, H = window.innerHeight;
-      var s = Math.min(W / 1290, H / 860);
-      var on = W >= 940 && (!picker || s * 17 >= 16);
-      d.classList.toggle("staged", on);
-      if (on) {
-        d.style.setProperty("--s", String(s));
-        d.style.setProperty("--bleed", Math.max(0, (W / s - 1290) / 2) + "px");
-        d.style.setProperty("--below", Math.max(0, H / s - 860) + "px");
-      }
-    };
-    fit();
-    window.addEventListener("resize", fit);
-  }
 
-  // ---- entrance, once: after fonts and two frames, or after 1200 ms
-  if (d.classList.contains("enter")) {
-    $$(".nav .brand, .nav .links a, .nav .tools > *, .nav .nav-cta, .nav .menu").forEach(function (e, i) { e.style.setProperty("--i", String(i)); });
-    var started = false;
-    var go = function () {
-      if (started) return; started = true;
-      d.classList.add("entering");
-      requestAnimationFrame(function () {
-        d.classList.remove("enter");
-        setTimeout(function () { d.classList.remove("entering"); }, 1900);
-      });
-    };
-    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
-      requestAnimationFrame(function () { requestAnimationFrame(go); });
-    });
-    setTimeout(go, 1200);
-  }
+  // ---- lists of identity providers (picker and /idps)
+  // Case-, accent- and width-insensitive, as src/ui/list.js norm().
+  var norm = function (s) { return String(s || "").normalize("NFKC").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim(); };
+  var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+  var countText = function (el, n) { el.textContent = n === 1 ? el.getAttribute("data-one") : el.getAttribute("data-many").replace("{n}", String(n)); };
+  // Highlight the first match of the query in a name (text nodes only).
+  var mark = function (el, q) {
+    var full = el.getAttribute("title") || el.textContent;
+    el.textContent = "";
+    var i = q ? full.toLowerCase().indexOf(q) : -1;
+    if (i < 0) { el.textContent = full; return; }
+    el.appendChild(document.createTextNode(full.slice(0, i)));
+    var m = document.createElement("mark"); m.textContent = full.slice(i, i + q.length); el.appendChild(m);
+    el.appendChild(document.createTextNode(full.slice(i + q.length)));
+  };
 
-  // ---- band video: plays unless reduced motion
-  var v = $(".band video");
-  if (v) {
-    var sync = function () {
-      if (reduce.matches) { v.pause(); return; }
-      v.muted = true;
-      var p = v.play(); if (p && p.catch) p.catch(function () {});
-    };
-    sync();
-    if (reduce.addEventListener) reduce.addEventListener("change", sync);
-  }
-
-  // ---- picker: search, keyboard, Continue
+  // The picker: a combobox (the search field) over a listbox. Arrow keys move
+  // through the visible options, Enter selects (Enter again continues),
+  // Escape clears the search. "Show all" expands the list; search always
+  // looks through every provider.
   var form = $("form.picker");
   if (form) {
-    var q = $("input[type=search]", form);
-    var rows = $$("li[data-q]", form);
-    var none = $(".none", form);
-    var btn = $("button[type=submit]", form);
-    var visible = function () { return rows.filter(function (r) { return !r.hidden; }).map(function (r) { return $("input", r); }); };
-    var update = function () {
-      var s = q.value.trim().toLowerCase(), n = 0;
-      rows.forEach(function (r) { var on = !s || r.getAttribute("data-q").indexOf(s) >= 0; r.hidden = !on; if (on) n++; });
-      none.hidden = n > 0 || !rows.length;
-      var c = $("input[name=idp]:checked", form);
-      if (!c || c.closest("li").hidden) { var f = visible()[0]; if (f) f.checked = true; }
-      btn.disabled = !$("li:not([hidden]) input[name=idp]:checked", form);
+    var q = $("#q", form), list = $("#idp-list", form), btn = $("#continue", form), more = $("#show-all", form), cnt = $("#idp-count", form), none = $(".empty.none", form);
+    var opts = $$("li[role=option]", list);
+    var expanded = !more;
+    var active = null;
+    var setActive = function (li) {
+      if (active) active.classList.remove("active");
+      active = li;
+      if (li) { li.classList.add("active"); q.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({ block: "nearest" }); } else q.removeAttribute("aria-activedescendant");
     };
-    q.addEventListener("input", update);
-    q.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowDown") { e.preventDefault(); var c = $("li:not([hidden]) input:checked", form) || visible()[0]; if (c) c.focus(); }
-      if (e.key === "Enter") { e.preventDefault(); if (!btn.disabled) form.requestSubmit(btn); }
-    });
-    rows.forEach(function (r) {
-      $("input", r).addEventListener("keydown", function (e) {
-        if (e.key === "ArrowUp" && visible()[0] === e.target) { e.preventDefault(); q.focus(); }
+    var choose = function (li) {
+      opts.forEach(function (o) { o.setAttribute("aria-selected", o === li ? "true" : "false"); });
+      $("input", li).checked = true;
+      btn.disabled = false;
+    };
+    var visible = function () { return opts.filter(function (o) { return !o.hidden; }); };
+    var update = function () {
+      var s = norm(q.value), n = 0;
+      opts.forEach(function (o) {
+        var on = s ? o.getAttribute("data-q").indexOf(s) >= 0 : expanded || !o.hasAttribute("data-more");
+        o.hidden = !on; if (on) n++;
+        mark($(".n", o), s && on ? q.value.trim().toLowerCase() : "");
       });
-      r.addEventListener("dblclick", function () { if (!btn.disabled) form.requestSubmit(btn); });
+      if (more) more.hidden = !!s;
+      none.hidden = n > 0;
+      countText(cnt, s ? n : opts.length);
+      if (active && active.hidden) setActive(null);
+    };
+    if (more) more.addEventListener("click", function (e) {
+      e.preventDefault();
+      expanded = !expanded;
+      more.setAttribute("aria-expanded", expanded ? "true" : "false");
+      var t = more.textContent; more.textContent = more.getAttribute("data-less"); more.setAttribute("data-less", t);
+      update();
+    });
+    q.addEventListener("input", function () { setActive(null); update(); });
+    q.addEventListener("keydown", function (e) {
+      var vis = visible(), i = active ? vis.indexOf(active) : -1;
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive(vis[Math.min(vis.length - 1, i + 1)] || null); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(vis[Math.max(0, i - 1)] || null); }
+      else if (e.key === "Home" && active) { e.preventDefault(); setActive(vis[0]); }
+      else if (e.key === "End" && active) { e.preventDefault(); setActive(vis[vis.length - 1]); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        var target = active || (vis.length === 1 ? vis[0] : null);
+        if (target && target.getAttribute("aria-selected") !== "true") choose(target);
+        else if (!btn.disabled && $("input:checked", list)) form.requestSubmit(btn);
+      } else if (e.key === "Escape") { if (q.value) { e.preventDefault(); q.value = ""; setActive(null); update(); } }
+    });
+    opts.forEach(function (o) {
+      o.addEventListener("click", function () { choose(o); setActive(o); });
+      o.addEventListener("dblclick", function () { choose(o); if (!btn.disabled) form.requestSubmit(btn); });
     });
     form.addEventListener("submit", function () { btn.disabled = true; });
     update();
+  }
+
+  // /idps: search, sort without a reload, sections that remember being closed.
+  var bar = $("#idps-bar");
+  if (bar) {
+    var iq = $("#iq", bar), sort = $("#isort", bar), icnt = $("#icount", bar), inone = $(".empty.none");
+    var groups = $$("#idps-groups details.group");
+    var closed = {}; try { closed = JSON.parse(store.get("roamid.idps.closed") || "{}") || {}; } catch (e) {}
+    groups.forEach(function (g) {
+      if (closed[g.id]) g.open = false;
+      g.addEventListener("toggle", function () { closed[g.id] = !g.open; store.set("roamid.idps.closed", JSON.stringify(closed)); });
+    });
+    var rows = $$(".idrow");
+    var filter = function () {
+      var s = norm(iq.value), n = 0;
+      rows.forEach(function (r) { var on = !s || r.getAttribute("data-q").indexOf(s) >= 0; r.hidden = !on; if (on) n++; mark($(".nm", r), s && on ? iq.value.trim().toLowerCase() : ""); });
+      groups.forEach(function (g) { var any = $$(".idrow", g).some(function (r) { return !r.hidden; }); g.hidden = !any; if (s && any) g.open = true; });
+      countText(icnt, n);
+      inone.hidden = n > 0;
+    };
+    var cmp = {
+      name: function (a, b) { return a.getAttribute("data-name").localeCompare(b.getAttribute("data-name")); },
+      added: function (a, b) { return (+b.getAttribute("data-added") - +a.getAttribute("data-added")) || cmp.name(a, b); },
+      status: function (a, b) { return (+a.getAttribute("data-rank") - +b.getAttribute("data-rank")) || cmp.name(a, b); },
+    };
+    var resort = function () {
+      var by = cmp[sort.value] ? sort.value : "name";
+      groups.forEach(function (g) { var ul = $(".idlist", g); $$(".idrow", ul).sort(cmp[by]).forEach(function (r) { ul.appendChild(r); }); });
+      try { var u = new URL(location.href); u.searchParams.set("sort", by); history.replaceState(null, "", u); } catch (e) {}
+    };
+    iq.addEventListener("input", filter);
+    iq.addEventListener("keydown", function (e) { if (e.key === "Escape" && iq.value) { iq.value = ""; filter(); } });
+    sort.addEventListener("change", resort);
   }
 
   // ---- SAML: post the message on load

@@ -9,7 +9,7 @@ import { join, dirname, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SERVED = ["fonts/figtree-latin.woff2", "fonts/figtree-latin-ext.woff2", "band.mp4", "poster.webp", "mark.svg", "boot.js", "roamid.js", "roamid.css"];
+const SERVED = ["mark.svg", "lab-logo.webp", "lab-logo.png", "roamid.js", "roamid.css"];
 const check = process.argv.includes("--check");
 
 const hashed = (name, buf) => {

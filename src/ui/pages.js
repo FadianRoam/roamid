@@ -1,14 +1,16 @@
-// HTML pages. Visual system: Figtree, black pill navigation, one-screen hero
-// with a cyan video band and a floating card (landing and the identity
-// provider picker), #f2f2f2 cards on content pages. Light, dark and system
-// theme: the theme cookie is applied on the server (no flash); "system"
-// leaves it to prefers-color-scheme. All CSS, JavaScript, fonts and media are
-// served from this origin (src/ui/manifest.js).
+// HTML pages: a plain, accessible base (assets/roamid.css), light, dark and
+// system theme (the theme cookie is applied on the server, no flash). The
+// <head> description, extra stylesheets and the landing heading come from
+// src/platform/ (a deployment may replace that module). Every CSS,
+// JavaScript and image file is served from this origin (src/ui/manifest.js).
 
-import { t, errorText, localName } from "./i18n.js";
+import { t, errorText, localName, localPath, isTwinPath } from "./i18n.js";
+import { renderHead, stylesheets, hero, replacesBaseStylesheet } from "../platform/index.js";
+import { norm, searchText, idpHost, hostOf, orderIdps, pickerSplit, sortIdps, groupIdps, stateOf } from "./list.js";
 import { ASSETS } from "./manifest.js";
 
-export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+import { esc } from "./esc.js";
+export { esc };
 export const REPO = "https://github.com/FadianRoam/roamid";
 const DOCS = { en: `${REPO}#documentation`, zh: `${REPO}/blob/main/README.zh-CN.md#文档` };
 export const REGISTRY_DOCS = { en: `${REPO}/blob/main/docs/registry.md#without-an-account-at-a-listed-identity-provider`, zh: `${REPO}/blob/main/docs/zh-CN/registry.md` };
@@ -33,41 +35,53 @@ const NEXT_THEME = { system: "light", light: "dark", dark: "system" };
 function nav({ lang, theme, path, active }) {
   const other = lang === "zh" ? "en" : "zh";
   const otherLabel = other === "zh" ? "中文" : "English";
+  const L = (h) => localPath(lang, h);
   const links = [
-    ["/idps", t(lang, "nav_idps_short"), "idps"], ["/apps", t(lang, "nav_apps"), "apps"], [DOCS[lang], t(lang, "nav_docs"), "docs"],
-    ["/status", t(lang, "nav_status"), "status"], [REPO, t(lang, "nav_source"), "github"],
+    [L("/idps"), t(lang, "nav_idps_short"), "idps"], [L("/apps"), t(lang, "nav_apps"), "apps"], [DOCS[lang], t(lang, "nav_docs"), "docs"],
+    [L("/status"), t(lang, "nav_status"), "status"], [REPO, t(lang, "nav_source"), "github"],
   ];
   const a = ([h, l, k]) => `<a href="${esc(h)}"${active === k ? ' aria-current="page"' : ""}>${esc(l)}</a>`;
   const next = NEXT_THEME[theme];
   const themeLabel = t(lang, "theme_next", { cur: t(lang, "theme_" + theme), next: t(lang, "theme_" + next) });
+  // The language link: the other language's URL of this page (and the cookie, for sign-in flows).
+  const twin = localPath(other, String(path || "/").replace(/^\/zh(?=\/|$|\?)/, "") || "/");
+  const langLink = prefLink("lang", other, twin);
   return `<nav class="nav" aria-label="RoamID">
-<a class="brand" href="/">${MARK}<span>RoamID</span></a>
+<a class="brand" href="${esc(L("/"))}">${MARK}<span>RoamID</span></a>
 <div class="links">${links.map(a).join("")}</div>
 <div class="tools">
-<a class="tool lang-switch" href="${esc(prefLink("lang", other, path))}" hreflang="${other === "zh" ? "zh-CN" : "en"}" aria-label="${esc(t(lang, "language"))}: ${otherLabel}">${icon("globe")}<span>${otherLabel}</span></a>
+<a class="tool lang-switch" href="${esc(langLink)}" hreflang="${other === "zh" ? "zh-CN" : "en"}" lang="${other === "zh" ? "zh-CN" : "en"}">${icon("globe")}<span>${otherLabel}</span></a>
 <a class="tool theme-switch" data-theme-current="${theme}" href="${esc(prefLink("theme", next, path))}" aria-label="${esc(themeLabel)}" title="${esc(themeLabel)}">${icon(theme)}</a>
 </div>
-<a class="nav-cta wide" href="/demo">${esc(t(lang, "nav_demo"))}</a>
+<a class="nav-cta wide" href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a>
 <details class="menu"><summary aria-label="${esc(t(lang, "menu"))}" aria-controls="menu-panel">${icon("burger")}</summary>
-<div class="menu-panel" id="menu-panel">${links.map(a).join("")}<a href="/demo">${esc(t(lang, "nav_demo"))}</a><hr>
-<a class="lang-switch" href="${esc(prefLink("lang", other, path))}">${icon("globe")}${otherLabel}</a>
+<div class="menu-panel" id="menu-panel">${links.map(a).join("")}<a href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a><hr>
+<a class="lang-switch" href="${esc(langLink)}" lang="${other === "zh" ? "zh-CN" : "en"}">${icon("globe")}${otherLabel}</a>
 ${["system", "light", "dark"].map((v) => `<a href="${esc(prefLink("theme", v, path))}"${theme === v ? ' aria-current="true"' : ""}>${icon(v)}${esc(t(lang, "theme_" + v))}</a>`).join("")}
 </div></details>
 </nav>`;
 }
 
-function doc({ lang, theme, title, body, anim = false, head = "" }) {
+// The instance's BASE_URL, for the head context (set once per request by src/index.js).
+let BASE = "";
+export const setBase = (b) => { BASE = String(b || "").replace(/\/+$/, ""); };
+const ERROR_STATUS = { not_found: 404, rate_limited: 429, server_error: 500, invalid_request: 400 };
+
+// The <head> description and the rest come from the platform module. path:
+// this page's URL; the head context gets the English path without /zh.
+function doc({ lang, theme, title, pageTitle = title, body, head = "", description = "", path = "/", page = "content", noindex = false, status = 200, isError = false, data = null }) {
+  const [rawPath, query = ""] = String(path || "/").split("?");
+  const enPath = rawPath.replace(/^\/zh(?=\/|$)/, "") || "/";
+  // Indexable: the public pages only (not the picker, console, admin, errors, reports or test sign-ins).
+  const isPublic = !noindex && !isError && isTwinPath(enPath) && !/^\/(test|report)(\/|$)/.test(enPath);
   return `<!doctype html>
-<html lang="${lang === "zh" ? "zh-CN" : "en"}"${theme !== "system" ? ` data-theme="${theme}"` : ""}${anim ? " data-anim" : ""}>
+<html lang="${lang === "zh" ? "zh-CN" : "en"}"${theme !== "system" ? ` data-theme="${theme}"` : ""} data-page="${esc(page)}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="${theme === "system" ? "light dark" : theme}">
-<title>${esc(title)}</title>
+${renderHead({ lang, path: enPath, query, status, isError, title: pageTitle, docTitle: title, description, base: BASE, data, page, noindex: !isPublic })}
 <link rel="icon" href="${ASSETS["mark.svg"]}" type="image/svg+xml">
-<link rel="preload" href="${ASSETS["fonts/figtree-latin.woff2"]}" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="${ASSETS["roamid.css"]}">
-<script src="${ASSETS["boot.js"]}"></script>
+${baseStylesheet(replacesBaseStylesheet)}${stylesheets({ lang, page })}
 <script src="${ASSETS["roamid.js"]}" defer></script>${head}
 </head>
 <body>
@@ -76,67 +90,75 @@ ${body}
 </html>`;
 }
 
-const band = () => `<div class="band" aria-hidden="true"><video muted loop playsinline preload="metadata" poster="${ASSETS["poster.webp"]}"><source src="${ASSETS["band.mp4"]}" type="video/mp4"></video></div>`;
+// The base stylesheet link, unless the platform module ships the base CSS itself.
+export const baseStylesheet = (replaced) => (replaced ? "" : `<link rel="stylesheet" href="${ASSETS["roamid.css"]}">`);
 
-export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "" }) {
-  const foot = `<footer class="foot"><a href="/">RoamID</a><a href="/idps">${esc(t(lang, "nav_idps"))}</a><a href="/status">${esc(t(lang, "nav_status"))}</a><a href="/apps">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="/report">${esc(t(lang, "rep_title"))}</a><a href="/demo">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></footer>`;
-  return doc({ lang, theme, head, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${foot}</div>` });
+// The page footer, on every page: links and "Powered by YunZheng LAB".
+export function footer(lang) {
+  const L = (h) => localPath(lang, h);
+  return `<footer class="foot"><nav class="foot-links" aria-label="${esc(t(lang, "footer_nav"))}"><a href="${esc(L("/"))}">RoamID</a><a href="${esc(L("/idps"))}">${esc(t(lang, "nav_idps"))}</a><a href="${esc(L("/status"))}">${esc(t(lang, "nav_status"))}</a><a href="${esc(L("/apps"))}">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="${esc(L("/report"))}">${esc(t(lang, "rep_title"))}</a><a href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></nav>
+<p class="powered"><a href="https://yunzheng.space/"><span>${esc(t(lang, "powered_by"))}</span><picture><source srcset="${ASSETS["lab-logo.webp"]}" type="image/webp"><img src="${ASSETS["lab-logo.png"]}" width="72" height="32" alt="YunZheng LAB" loading="lazy" decoding="async"></picture></a></p></footer>`;
 }
 
-const hostOf = (u) => { try { return new URL(u).host; } catch { return ""; } };
-const idpHost = (i) => hostOf(i.issuer || i.sso_url || i.metadata_url || i.entity_id);
+export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "", description = "", noindex = false, status = 200, isError = false, data = null }) {
+  return doc({ lang, theme, head, description, path, noindex, status, isError, data, pageTitle: title, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${footer(lang)}</div>` });
+}
+
 const dotClass = (h) => (["up", "degraded", "down"].includes(h) ? h : "unknown");
 
 // ---- landing ----------------------------------------------------------------
 
 export function homePage({ lang, theme, idps = [], health = {} }) {
-  const rows = idps.slice(0, 2).map((i) => `<li class="row" aria-hidden="true"><span class="dot ${dotClass(health[i.id])}"></span><span class="t"><span class="n">${esc(localName(i, lang))}</span><span class="h">${esc(idpHost(i))}</span></span><span class="tick"></span></li>`).join("");
-  const body = `<div class="hero" data-page="landing"><div class="stage">
-${nav({ lang, theme, path: "/", active: "" })}
-<h1 class="display"><span>${esc(t(lang, "hero_l1"))}</span><span>${esc(t(lang, "hero_l2"))}</span></h1>
-<p class="sub">${esc(t(lang, "hero_sub"))}</p>
-<a class="pill hero-cta" href="${esc(RP_DOCS[lang])}">${esc(t(lang, "hero_cta"))}</a>
-<a class="hero-note" href="${esc(REGISTRY_DOCS[lang])}" id="pr-channel">${esc(t(lang, "pr_channel"))}</a>
-<div class="scene">${band()}
-<div class="card" role="img" aria-label="${esc(t(lang, "sample_label"))}">
-<div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(t(lang, "sample_rp"))}</b><span class="host">portal.example.com</span></div>
-<div class="search">${icon("search")}<span class="ph">${esc(t(lang, "pick_search"))}</span></div>
-<ul class="rows">${rows}<li class="row join"><span class="dot unknown"></span><span class="t"><span class="n">${esc(t(lang, "sample_join"))}</span><span class="h">${esc(t(lang, "sample_join_h"))}</span></span></li></ul>
-<div class="actions"><span class="cancel">${esc(t(lang, "pick_cancel_short"))}</span><span class="pill demo">${esc(t(lang, "pick_continue"))}</span></div>
-</div></div></div></div>`;
-  return doc({ lang, theme, title: "RoamID", body, anim: true });
+  const body = `<div class="page"><div class="topbar">${nav({ lang, theme, path: localPath(lang, "/"), active: "" })}</div><main class="content landing">
+${hero({ lang, h1: `${t(lang, "hero_l1")} ${t(lang, "hero_l2")}`, sub: t(lang, "hero_sub"), cta: t(lang, "hero_cta"), ctaHref: RP_DOCS[lang], note: t(lang, "pr_channel"), noteHref: REGISTRY_DOCS[lang], idps, health })}
+<section class="section"><h2>${esc(t(lang, "home_how"))}</h2><ol class="steps">${t(lang, "home_steps").map((x) => `<li>${esc(x)}</li>`).join("")}</ol></section>
+</main>${footer(lang)}</div>`;
+  return doc({ lang, theme, title: "RoamID", description: t(lang, "hero_sub"), path: localPath(lang, "/"), page: "landing", body });
 }
 
 // ---- the identity provider picker ---------------------------------------------
 
-export function pickerPage({ lang, theme, path, tx, client, redirectUri, idps, last, cancelUrl, health = {} }) {
+// A provider's logo (served from /logos/) or a monogram tile.
+function logoTile(i, lang, { lazy = true, size = 28 } = {}) {
+  const name = localName(i, lang);
+  if (i.logo && i.logo.path) {
+    const w = i.logo.width >= i.logo.height ? size * Math.min(2, i.logo.width / i.logo.height) : size;
+    return `<span class="logo"><img src="/logos/${esc(i.logo.path)}" width="${Math.round(w)}" height="${size}" alt="${esc(t(lang, "logo_of", { name }))}"${lazy ? ' loading="lazy"' : ""} decoding="async"></span>`;
+  }
+  return `<span class="logo tile" aria-hidden="true">${esc([...name.trim()][0] || "?")}</span>`;
+}
+
+export function pickerPage({ lang, theme, path, tx, client, redirectUri, idps, last, hint = null, cancelUrl, health = {}, showAll = false }) {
   const rp = localName(client, lang);
-  const ordered = last && idps.some((i) => i.id === last) ? [idps.find((i) => i.id === last), ...idps.filter((i) => i.id !== last)] : idps;
+  const ordered = orderIdps(idps, { lang, last, hint, health });
+  const { top, rest } = showAll ? { top: ordered, rest: [] } : pickerSplit(ordered, { last, hint });
   const checked = ordered[0] && ordered[0].id;
-  const row = (idp) => {
+  const row = (idp, more) => {
     const h = health[idp.id];
     const host = idpHost(idp);
-    const q = `${idp.name.en} ${idp.name.zh || ""} ${idp.id} ${host}`.toLowerCase();
-    const tags = [idp.id === last ? t(lang, "pick_last") : "", h === "down" ? t(lang, "status_down") : h === "degraded" ? t(lang, "status_degraded") : ""].filter(Boolean).join(" · ");
-    return `<li data-q="${esc(q)}"><label class="row"><input type="radio" name="idp" value="${esc(idp.id)}"${idp.id === checked ? " checked" : ""}><span class="dot ${dotClass(h)}" title="${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}"></span><span class="t"><span class="n">${esc(localName(idp, lang))}</span><span class="h">${esc(host)}</span></span>${tags ? `<span class="tag">${esc(tags)}</span>` : ""}<span class="tick"></span></label></li>`;
+    const name = localName(idp, lang);
+    const tags = [idp.id === last ? t(lang, "pick_last") : "", h === "down" ? t(lang, "pick_down") : h === "degraded" ? t(lang, "status_degraded") : ""].filter(Boolean).join(" · ");
+    const sel = idp.id === checked;
+    return `<li role="option" id="opt-${esc(idp.id)}" aria-selected="${sel}" data-q="${esc(searchText(idp))}" data-state="${esc(dotClass(h))}"${more ? " data-more hidden" : ""}><label class="row"><input type="radio" name="idp" value="${esc(idp.id)}" tabindex="-1"${sel ? " checked" : ""}><span class="dot ${dotClass(h)}" title="${esc(t(lang, "status_" + dotClass(h)))}"></span><span class="t"><span class="n" title="${esc(name)}">${esc(name)}</span><span class="h" title="${esc(host)}">${esc(host)}</span></span>${tags ? `<span class="tag">${esc(tags)}</span>` : ""}${logoTile(idp, lang)}</label></li>`;
   };
+  const count = (n) => (n === 1 ? t(lang, "pick_count_one") : t(lang, "pick_count", { n }));
   const card = idps.length ? `<form class="card picker" method="post" action="/select">
 <input type="hidden" name="tx" value="${esc(tx)}">
 <div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b><span class="host">${esc(client.domain || hostOf(redirectUri))}</span></div>
-<label class="search">${icon("search")}<input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="${esc(t(lang, "pick_search"))}" aria-label="${esc(t(lang, "pick_search"))}"></label>
-<ul class="rows" role="radiogroup" aria-label="${esc(t(lang, "pick_list"))}">${ordered.map(row).join("")}</ul>
-<div class="empty none" hidden>${esc(t(lang, "pick_none"))}</div>
+<label class="search">${icon("search")}<input id="q" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-controls="idp-list" aria-expanded="true" aria-autocomplete="list" aria-describedby="idp-count" placeholder="${esc(t(lang, "list_search"))}" aria-label="${esc(t(lang, "pick_search"))}"></label>
+<p class="count" id="idp-count" aria-live="polite" data-one="${esc(t(lang, "pick_count_one"))}" data-many="${esc(t(lang, "pick_count", { n: "{n}" }))}">${esc(count(ordered.length))}</p>
+<ul class="rows" id="idp-list" role="listbox" aria-label="${esc(t(lang, "pick_list"))}">${top.map((i) => row(i, false)).join("")}${rest.map((i) => row(i, true)).join("")}</ul>
+${rest.length ? `<a class="more" id="show-all" role="button" aria-controls="idp-list" aria-expanded="false" href="/select?tx=${encodeURIComponent(tx)}&amp;all=1" data-less="${esc(t(lang, "pick_show_less"))}">${esc(t(lang, "pick_show_all", { n: ordered.length }))}</a>` : ""}
+<p class="empty none" hidden>${esc(t(lang, "pick_none"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></p>
 <div class="actions"><a class="cancel" href="${esc(cancelUrl)}">${esc(t(lang, "pick_cancel_short"))}</a><button class="pill" type="submit" id="continue">${esc(t(lang, "pick_continue"))}</button></div>
 <p class="fine">${esc(t(lang, "pick_note", { rp }))}</p>
-${client.builtin ? "" : `<a class="report-link" href="/report?app=${encodeURIComponent(client.client_id)}&amp;tx=${encodeURIComponent(tx)}" id="report-link">${esc(t(lang, "pick_report"))}</a>`}
-</form>` : `<div class="card"><div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b></div><div class="empty">${esc(t(lang, "pick_empty"))}</div><div class="actions"><a class="cancel" href="${esc(cancelUrl)}">${esc(t(lang, "pick_cancel_short"))}</a></div></div>`;
-  const body = `<div class="hero" data-page="picker"><div class="stage">
-${nav({ lang, theme, path, active: "" })}
-<h1 class="display"><span>${esc(t(lang, "pick_h1"))}</span><span>${esc(t(lang, "pick_h2"))}</span></h1>
-<p class="sub">${esc(t(lang, "pick_sub"))}</p>
-<div class="scene">${band()}${card}</div>
-</div></div>`;
-  return doc({ lang, theme, title: `${t(lang, "pick_title", { rp })} · RoamID`, body, anim: true });
+${client.builtin ? "" : `<a class="report-link" href="${esc(localPath(lang, "/report"))}?app=${encodeURIComponent(client.client_id)}&amp;tx=${encodeURIComponent(tx)}" id="report-link">${esc(t(lang, "pick_report"))}</a>`}
+</form>` : `<div class="card"><div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b></div><div class="empty">${esc(t(lang, "pick_empty"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></div><div class="actions"><a class="cancel" href="${esc(cancelUrl)}">${esc(t(lang, "pick_cancel_short"))}</a></div></div>`;
+  const body = `<div class="page"><div class="topbar">${nav({ lang, theme, path, active: "" })}</div><main class="content picker-page">
+<h1 class="title">${esc(t(lang, "pick_h1"))} ${esc(t(lang, "pick_h2"))}</h1>
+${card}
+</main>${footer(lang)}</div>`;
+  return doc({ lang, theme, title: `${t(lang, "pick_title", { rp })} · RoamID`, path, page: "picker", noindex: true, body });
 }
 
 // ---- content pages -------------------------------------------------------------
@@ -156,7 +178,7 @@ export function errorPage({ lang, theme, path, code, requestId, detail, backUrl,
 <div class="alert">${icon("alert")}<div><p>${esc(errorText(lang, code))}</p>${detail ? `<p class="mono">${esc(detail)}</p>` : ""}
 <div class="kv"><div>${esc(t(lang, "err_code"))}</div><div class="mono" data-code>${esc(code)}</div><div>${esc(t(lang, "err_request"))}</div><div class="mono">${esc(requestId)}</div></div></div></div>
 <div class="btnrow">${backUrl ? `<a class="pill" href="${esc(backUrl)}">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</a>` : ""}${backForm ? `<form method="post" action="${esc(backForm.action)}">${hiddenFields(backForm.fields)}<button class="pill" type="submit">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</button></form>` : ""}<a class="pill ghost" href="/">${esc(t(lang, "err_home"))}</a></div>`;
-  return contentPage({ lang, theme, path, active: "", title: t(lang, "err_title"), body, narrow: true });
+  return contentPage({ lang, theme, path, active: "", title: t(lang, "err_title"), body, narrow: true, isError: true, status: ERROR_STATUS[code] || 400 });
 }
 
 export function messagePage({ lang, theme, path, title, lead }) {
@@ -169,13 +191,34 @@ export function healthBadge(lang, idp, h) {
   return `<span class="badge ${cls}"><span class="dot ${dotClass(h)}"></span>${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}</span>`;
 }
 
-export function idpsPage({ lang, theme, idps, health = {} }) {
-  const L = (k) => ` data-label="${esc(t(lang, k))}"`;
-  const rows = idps.map((i) => `<tr><td${L("col_name")}><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span>${i.note ? `<br><span class="note">${esc(i.note)}</span>` : ""}</td><td${L("col_issuer")}><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td${L("col_domains")}>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td${L("col_status")}>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
+export function idpsPage({ lang, theme, idps, health = {}, added = {}, sort = "name", fixture = null }) {
+  const by = ["name", "added", "status"].includes(sort) ? sort : "name";
+  const sorted = sortIdps(idps, { by, lang, health, added });
+  const rank = { up: 0, degraded: 1, unknown: 2, down: 3, disabled: 4 };
+  const row = (i) => {
+    const st = stateOf(i, health);
+    const name = localName(i, lang);
+    const host = idpHost(i) || i.issuer || i.entity_id || "";
+    const sub = [...(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`), i.note ? `<span class="note">${esc(i.note)}</span>` : ""].filter(Boolean).join(" ");
+    return `<li class="idrow" id="idp-${esc(i.id)}" data-q="${esc(searchText(i))}" data-name="${esc(norm(name))}" data-added="${added[i.id] || 0}" data-rank="${rank[st]}">
+<span class="main"><span class="nm" title="${esc(name)}">${esc(name)}</span><span class="idt">${esc(i.id)}</span></span>
+<span class="host" title="${esc(host)}">${esc(host)}</span>
+<span class="st"><span class="dot ${st === "disabled" ? "unknown" : st}"></span>${esc(st === "disabled" ? t(lang, "disabled") : t(lang, "status_" + st))}</span>
+<span class="badge proto">${i.protocol === "saml2" ? "SAML" : "OIDC"}</span>
+${logoTile(i, lang)}${sub ? `\n<span class="sub">${sub}</span>` : ""}
+</li>`;
+  };
+  const groups = groupIdps(sorted);
+  const q = (k) => `${localPath(lang, "/idps")}?sort=${k}${fixture != null ? `&amp;fixture=${fixture}` : ""}`;
   const body = `<h1 class="title">${esc(t(lang, "idps_title"))}</h1><p class="lead">${esc(t(lang, "idps_lead"))}</p>
-<div class="section box"><div class="scroll"><table class="tbl stack"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+<div class="listbar" id="idps-bar"><label class="search">${icon("search")}<input id="iq" type="search" autocomplete="off" spellcheck="false" placeholder="${esc(t(lang, "list_search"))}" aria-label="${esc(t(lang, "list_search"))}" aria-controls="idps-groups"></label>
+<form class="sort" method="get" action="${esc(localPath(lang, "/idps"))}"><label for="isort">${esc(t(lang, "list_sort"))}</label><select id="isort" name="sort">${["name", "added", "status"].map((k) => `<option value="${k}"${k === by ? " selected" : ""}>${esc(t(lang, "sort_" + k))}</option>`).join("")}</select>${fixture != null ? `<input type="hidden" name="fixture" value="${esc(fixture)}">` : ""}<noscript><button class="pill ghost" type="submit">${esc(t(lang, "list_sort"))}</button></noscript></form>
+<p class="count" id="icount" aria-live="polite" data-one="${esc(t(lang, "pick_count_one"))}" data-many="${esc(t(lang, "pick_count", { n: "{n}" }))}">${esc(sorted.length === 1 ? t(lang, "pick_count_one") : t(lang, "pick_count", { n: sorted.length }))}</p></div>
+<div id="idps-groups">${groups.map((g) => `<details class="group" id="g-${g.key}" open><summary><h2>${esc(t(lang, "proto_" + g.key))} <span class="gn">${g.items.length}</span></h2></summary><ul class="idlist">${g.items.map(row).join("")}</ul></details>`).join("")}</div>
+<p class="empty none" hidden>${esc(t(lang, "pick_none"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></p>
+${sorted.length ? "" : `<p class="empty">${esc(t(lang, "pick_none"))} <a href="${esc(REGISTRY_DOCS[lang])}">${esc(t(lang, "pick_register"))}</a></p>`}
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
-  return contentPage({ lang, theme, path: "/idps", active: "idps", title: t(lang, "idps_title"), body });
+  return contentPage({ lang, theme, path: localPath(lang, "/idps"), active: "idps", title: t(lang, "idps_title"), description: t(lang, "idps_lead"), data: { idps: sorted }, body });
 }
 
 function age(lang, secs) {

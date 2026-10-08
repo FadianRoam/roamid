@@ -21,7 +21,7 @@ Anyone can report an application or an identity provider:
 - from the application's public page at `/apps/<client_id>`,
 - or at `/report`.
 
-The form asks for a category (phishing or impersonation, fraud, malware, illegal content, other), a description and, optionally, an email address for questions. It is protected by Orbit Verify.
+The form asks for a category (phishing or impersonation, fraud, malware, illegal content, other), a description and, optionally, an email address for questions. It is rate limited per network address; an instance may add a human check.
 
 RoamID stores the report, the identifier of the sign-in in progress when the report was made from the sign-in page (application and identity provider ids, no personal data), the optional email address, and a one-way hash of the reporter's network address. The hash is used only to count distinct reporters.
 

@@ -19,7 +19,7 @@ routes = [
   { pattern = "<origin hostname>", custom_domain = true },
 ]
 
-# Static assets (fonts, CSS, JavaScript, the band video), content-hashed by
+# Static assets (CSS, JavaScript, images), content-hashed by
 # scripts/build-assets.mjs into public/, served before the Worker runs.
 [build]
 command = "node scripts/build-assets.mjs"
@@ -31,9 +31,10 @@ binding = "ASSETS"
 [vars]
 BASE_URL = "https://<public hostname>"
 REGISTRY_URL = "https://fadianroam.github.io/roamid/registry.json"
-# Report form (Orbit Verify site key, public) and the operator's help desk.
-VERIFY_SITEKEY = "<site key>"
-HELPDESK_URL = "<help desk base URL>"
+# Optional: new reports and appeals are posted as JSON ({subject, body, link})
+# to this URL (for example a chat or ticket system webhook); without it they
+# are logged and listed at /admin/reports.
+# OPERATOR_WEBHOOK_URL = "https://<webhook>"
 
 # Registry sync, domain proofs, health probes and clean-up every 5 minutes.
 [triggers]
@@ -55,9 +56,7 @@ enabled = true
 #   SIGNING_KEYS        JSON array of private JWKs, ES256 (scripts/keygen.mjs signing)
 #   CLIENT_KEYS         JSON array of private JWKs, RS256 or ES256 (scripts/keygen.mjs client)
 #   ADMIN_TOKEN         bearer token for POST /admin/sync
-#   CDN_KEY             key of the edge's signed origin header (optional)
 #   IDP_SECRET_<ID>     client secret at an identity provider that uses client_secret_*
 #   SAML_KEYS           JSON array of {kid, cert, key} (PEM), SAML signing and encryption
 #   OPERATOR_SUBS       RoamID public subs allowed into /admin/reports
-#   VERIFY_SECRET       Orbit Verify site secret (report form)
-#   HELPDESK_API_KEY    help desk API key (operator tickets for reports)
+#   APPEAL_TOKEN        bearer token for POST /admin/appeal (the repository's issue workflow)

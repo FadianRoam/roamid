@@ -1,5 +1,7 @@
-// English and Simplified Chinese. Language: ?lang= -> cookie -> ui_locales
-// -> Accept-Language -> English.
+// English and Simplified Chinese. Public pages have two URLs, /path (English)
+// and /zh/path (Chinese), and the URL decides (src/index.js sets the internal
+// x-roamid-twin header). Elsewhere (sign-in flows, console): cookie ->
+// ui_locales -> Accept-Language -> English.
 
 import { getCookie } from "../lib/http.js";
 import { C, CE } from "./i18n-console.js";
@@ -7,7 +9,22 @@ import { C, CE } from "./i18n-console.js";
 export const LANG_COOKIE = "__Host-rid_lang";
 export const THEME_COOKIE = "__Host-rid_theme";
 
+import { languagePaths } from "../platform/index.js";
+
+// Public pages with a /zh/ twin (and those a deployment adds).
+export const isTwinPath = (p) => ["/", "/idps", "/apps", "/status", "/demo", "/report", "/test"].includes(p) || (languagePaths(p) || []).includes("zh") || /^\/apps\/[a-z0-9-]{2,64}$/.test(p) || (/^\/test\/[a-z0-9-]{2,32}$/.test(p) && p !== "/test/callback");
+// Pages that exist in one URL only (the language follows the cookie): /zh/... goes there.
+export const isEnglishOnlyPath = (p) => /^\/(console|admin)(\/|$)/.test(p) || p === "/demo/saml" || JSON.stringify(languagePaths(p)) === '["en"]';
+// The URL of a public page in a language; other paths are unchanged. The
+// Chinese home page is /zh/.
+export const localPath = (lang, p) => {
+  const [path, rest = ""] = String(p).split(/(?=[?#])/);
+  return lang === "zh" && isTwinPath(path) ? `/zh${path}${rest}` : p;
+};
+
 export function pickLang(request, { uiLocales } = {}) {
+  const twin = request.headers.get("x-roamid-twin");
+  if (twin === "zh" || twin === "en") return twin;
   const url = new URL(request.url);
   const q = url.searchParams.get("lang");
   if (q === "zh" || q === "en") return q;
@@ -54,6 +71,10 @@ const T = {
     pick_lead: "Choose your identity provider.",
     pick_search: "Search identity providers",
     pick_last: "Last used",
+    pick_show_all: "Show all {n} providers", pick_show_less: "Show fewer providers", pick_count: "{n} providers", pick_count_one: "1 provider",
+    pick_register: "Register an identity provider", pick_down: "Unavailable",
+    list_search: "Search by name, domain or identifier", list_sort: "Sort", sort_name: "Name", sort_added: "Recently added", sort_status: "Status",
+    proto_oidc: "OpenID Connect", proto_saml2: "SAML 2.0", powered_by: "Powered by", footer_nav: "Site", logo_of: "{name} logo",
     pick_all: "All identity providers",
     pick_none: "No identity provider matches.",
     pick_empty: "No identity provider is available for this application.",
@@ -119,6 +140,10 @@ const T = {
     pick_lead: "选择你的身份提供方。",
     pick_search: "搜索身份提供方",
     pick_last: "上次使用",
+    pick_show_all: "显示全部 {n} 个身份提供方", pick_show_less: "收起", pick_count: "{n} 个身份提供方", pick_count_one: "1 个身份提供方",
+    pick_register: "登记身份提供方", pick_down: "暂不可用",
+    list_search: "按名称、域名或标识搜索", list_sort: "排序", sort_name: "名称", sort_added: "最近加入", sort_status: "状态",
+    proto_oidc: "OpenID Connect", proto_saml2: "SAML 2.0", powered_by: "技术支持", footer_nav: "站点", logo_of: "{name} 标志",
     pick_all: "全部身份提供方",
     pick_none: "没有匹配的身份提供方。",
     pick_empty: "此应用没有可用的身份提供方。",

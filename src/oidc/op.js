@@ -5,7 +5,7 @@ import { sign, verify, decode } from "../lib/jwt.js";
 import { signingKeys } from "../lib/keys.js";
 import { json, html, redirect, cookie, getCookie, readForm, now, newNonce, corsPreflight, cspPostingTo } from "../lib/http.js";
 import { allow } from "../lib/ratelimit.js";
-import { clientIp } from "../lib/edgesig.js";
+import { clientIp } from "../platform/index.js";
 import { count } from "../lib/events.js";
 import { getRegistry } from "../registry/store.js";
 import { sectorOf } from "../registry/validate.js";
@@ -259,7 +259,7 @@ export async function select(request, env) {
   }
   const v = view(request, { uiLocales: tx.ui_locales });
   const health = await healthMap(env);
-  return html(pickerPage({ ...v, lang, tx: tx.id, client, redirectUri: tx.redirect_uri, idps: allowed, last: getCookie(request, LAST_COOKIE), cancelUrl: tx.proto === "saml2" ? `/saml/idp/cancel?tx=${encodeURIComponent(tx.id)}` : rpError(env, tx, "access_denied", "the user cancelled"), health }));
+  return html(pickerPage({ ...v, lang, tx: tx.id, client, redirectUri: tx.redirect_uri, idps: allowed, last: getCookie(request, LAST_COOKIE), hint: tx.login_hint || null, showAll: new URL(request.url).searchParams.get("all") === "1", cancelUrl: tx.proto === "saml2" ? `/saml/idp/cancel?tx=${encodeURIComponent(tx.id)}` : rpError(env, tx, "access_denied", "the user cancelled"), health }));
 }
 
 export async function healthMap(env) {

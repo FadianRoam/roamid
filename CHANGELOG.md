@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 (2026-10-08)
+
+- `src/platform/`: the replaceable parts of a deployment (head metadata, extra stylesheets, landing heading, sitemap and robots, client address, operator notification, human check on the report form, response headers, extra pages, build marker) with generic defaults. Reports notify an optional `OPERATOR_WEBHOOK_URL`; the report form has no human check by default (rate limits apply).
+- A plain base stylesheet with system fonts, light and dark; the footer shows "Powered by YunZheng LAB".
+- Public pages have English URLs (`/idps`) and Chinese URLs (`/zh/idps`); `.html`, `.md`, a trailing slash, `/index.html` and `?lang=` answer 301 with the canonical URL.
+- Identity provider lists for up to 500 entries: instant search (case, accent and width insensitive; names in both languages, ids, hosts and email domains), the picker orders the last used provider, then `login_hint` domain matches, then by name, with unavailable providers last, and collapses after the first six; keyboard selection (combobox and listbox); `/idps` groups by protocol, sorts by name, recently added or status, and remembers closed groups.
+- Removed: the edge signature check, the help desk notifier, the report form's third-party check, the video band and the web font.
+
 ## 1.2.0 (2026-10-08)
 
 - Registry layout: an identity provider is a directory, `registry/idps/<id>/idp.json`, with an optional `logo.png`, `logo.webp` or `logo.jpg`. Entries moved from `registry/idps/<id>.json` keep their identifiers; applications stay at `registry/clients/<client_id>.json`.

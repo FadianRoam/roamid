@@ -4,6 +4,7 @@
 
 import { t, localName } from "../ui/i18n.js";
 import { contentPage, esc, hiddenFields, icon, REGISTRY_DOCS } from "../ui/pages.js";
+import { humanCheck } from "../platform/index.js";
 
 const STATUS_CLASS = { active: "ok", development: "warn", unverified: "warn", suspended: "bad", banned: "bad" };
 export const appStatus = (a) => (a.status === "active" && !a.domain_verified ? "unverified" : a.status);
@@ -154,7 +155,7 @@ ${sec(t(v.lang, "c_details"), kv([["client_id", `<code>${esc(a.client_id)}</code
 
 export const CATEGORIES = ["phishing", "fraud", "malware", "illegal", "other"];
 
-export function reportPage(v, { target, targetName, tx, sitekey, errors = [], sent, f = {} }) {
+export function reportPage(v, { target, targetName, tx, check = "", errors = [], sent, f = {} }) {
   if (sent) return page(v, t(v.lang, "rep_title"), `<h1 class="title">${esc(t(v.lang, "rep_sent_title"))}</h1><p class="lead">${esc(t(v.lang, "rep_sent_lead"))}</p><p class="lead mono" id="report-id">${esc(sent)}</p><div class="btnrow"><a class="pill ghost" href="/">${esc(t(v.lang, "err_home"))}</a></div>`);
   const kind = target && target.kind;
   const body = `<h1 class="title">${esc(t(v.lang, "rep_title"))}</h1><p class="lead">${esc(t(v.lang, "rep_lead"))}</p>
@@ -167,13 +168,13 @@ ${target ? `<input type="hidden" name="target" value="${esc(`${target.kind}:${ta
 <fieldset class="field"><legend class="lbl">${esc(t(v.lang, "rep_category"))}</legend><div class="checks">${CATEGORIES.map((c, i) => `<label><input type="radio" name="category" value="${c}"${(f.category ? f.category === c : i === 0) ? " checked" : ""}> ${esc(t(v.lang, "rep_cat_" + c))}</label>`).join("")}</div></fieldset>
 <label class="field"><span class="lbl">${esc(t(v.lang, "rep_description"))}</span><textarea class="prose" name="description" rows="5" required minlength="10" maxlength="4000">${esc(f.description || "")}</textarea></label>
 <label class="field"><span class="lbl">${esc(t(v.lang, "rep_email"))}</span><input type="email" name="contact_email" maxlength="254" value="${esc(f.contact_email || "")}"><span class="hint">${esc(t(v.lang, "rep_email_hint"))}</span></label>
-<div class="orbit-verify" data-sitekey="${esc(sitekey || "")}" data-action="report" data-lang="${v.lang === "zh" ? "zh" : "en"}"></div>
+${check || ""}
 <label class="check"><input type="checkbox" name="no_publish" value="yes"> ${esc(t(v.lang, "rep_no_publish"))}</label>
 <p class="hint">${esc(t(v.lang, "rep_publish_note"))}</p>
 <p class="hint">${esc(t(v.lang, "rep_privacy"))}</p>
 <div class="btnrow"><button class="pill" type="submit" id="send-report">${esc(t(v.lang, "rep_send"))}</button></div>
 </div></div></form>`;
-  return page(v, t(v.lang, "rep_title"), body, "", '\n<script src="https://verify.yunzheng.space/v1.js?v=1.4.0" async defer></script>');
+  return page(v, t(v.lang, "rep_title"), body, "", check ? humanCheck.script || "" : "");
 }
 
 // ---- operator ---------------------------------------------------------------------

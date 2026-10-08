@@ -17,8 +17,7 @@ const publicSub = (u) => sha256b64url(`good|${u.sub}`);
 async function consoleSetup() {
   const h = await setup();
   h.env.OPERATOR_SUBS = await publicSub(USERS.olga);
-  h.env.VERIFY_SECRET = "verify-secret"; h.env.VERIFY_SITEKEY = "ovk_test";
-  h.env.HELPDESK_URL = "https://helpdesk.example.test"; h.env.HELPDESK_API_KEY = "hd-key";
+  h.env.OPERATOR_WEBHOOK_URL = "https://hooks.example.test/roamid";
   await h.sync();
   return h;
 }
@@ -121,7 +120,7 @@ test("console: sign in with RoamID, create an app, prove the domain, active; sec
   const landing = await (await h.request("/console")).text();
   assert.match(landing, /console-signin/);
   assert.match(landing, /href="https:\/\/github\.com\/FadianRoam\/roamid\/blob\/main\/docs\/registry\.md[^"]*" id="pr-channel">No account at a listed identity provider\? Register by GitHub pull request</);
-  assert.match(await (await h.request("/", { headers: { "Accept-Language": "zh-CN" } })).text(), /没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记/);
+  assert.match(await (await h.request("/zh/", { headers: { "Accept-Language": "en" } })).text(), /没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记/);
   await consoleLogin(h, USERS.alice);
   assert.match(await (await h.request("/console")).text(), /Alice/);
   // A post without the CSRF token is refused.
@@ -231,18 +230,15 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   const c = await createApp(h);
   h.txt["_roamid-app.example.org"] = [`roamid-app=${c.id}`];
   await post(h, `/console/app/${c.id}/check`, {});
-  // A report from the picker: Orbit Verify is required.
+  // A report from the picker. With the default platform there is no human check: the rate limit applies.
   h.cookies = new Map();
   const q = new URLSearchParams({ response_type: "code", client_id: c.id, redirect_uri: "https://app.example.org/cb", scope: "openid", state: "s" });
   const tx = new URL(BASE + (await h.request(`/authorize?${q}`)).headers.get("Location")).searchParams.get("tx");
   const form = await h.request(`/report?app=${c.id}&tx=${tx}`);
-  assert.match(form.headers.get("Content-Security-Policy"), /script-src 'self' https:\/\/verify\.yunzheng\.space/);
+  assert.match(form.headers.get("Content-Security-Policy"), /script-src 'self'(;|$| 'nonce)/, "no third-party script");
   const formHtml = await form.text();
-  assert.match(formHtml, /data-sitekey="ovk_test"/);
-  assert.match(formHtml, /<script src="https:\/\/verify\.yunzheng\.space\/v1\.js[^"]*" async defer><\/script>/, "the widget script is on the page");
-  const rep = (token, extra = {}) => h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, tx, category: "phishing", description: "It asks for my bank password.", "orbit-verify-response": token, ...extra }).toString(), headers: { "CF-Connecting-IP": "198.51.100.7" } });
-  const denied = await rep("bad-token");
-  assert.equal(denied.status, 403);
+  assert.doesNotMatch(formHtml, /<script src="https?:/, "no third-party script on the page");
+  const rep = (token, extra = {}) => h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, tx, category: "phishing", description: "It asks for my bank password.", ...extra }).toString(), headers: { "CF-Connecting-IP": "198.51.100.7" } });
   const sent = await rep("good-token");
   assert.equal(sent.status, 200);
   assert.match(await sent.text(), /id="report-id">r-/);
@@ -251,7 +247,7 @@ test("reports, operator queue, suspend / ban / restore, appeal, refusal before t
   assert.equal(JSON.parse(row.context).sign_in.client_id, c.id);
   assert.notEqual(row.reporter_hash, "198.51.100.7");
   assert.equal(h.tickets.length, 1, "a help desk ticket for the operator");
-  assert.equal(h.tickets[0].key, "hd-key");
+  assert.equal(h.tickets[0].body.link, `${BASE}/admin/reports#${row.id}`, "the webhook gets the queue link");
   assert.equal(row.ticket, "T-1");
   assert.ok(h.tickets[0].body.body.includes(`${BASE}/admin/reports#${row.id}`), "the ticket links to the report in the queue");
   // A report alone changes nothing.
@@ -400,7 +396,7 @@ test("redaction: emails and phone numbers removed; URLs, domains and IPs defange
 
 async function reportAndAct(h, c, { description, noPublish = false, action = "suspend" }) {
   h.cookies = new Map();
-  const body = { target: `app:${c.id}`, category: "phishing", description, "orbit-verify-response": "good-token", ...(noPublish ? { no_publish: "yes" } : {}) };
+  const body = { target: `app:${c.id}`, category: "phishing", description, ...(noPublish ? { no_publish: "yes" } : {}) };
   await h.request("/report", { method: "POST", body: new URLSearchParams(body).toString(), headers: { "CF-Connecting-IP": "198.51.100.8" } });
   const rep = await h.db.prepare("SELECT * FROM reports WHERE description = ?").bind(description).first();
   await consoleLogin(h, USERS.olga);
@@ -448,7 +444,7 @@ test("transparency: decisions are public at once; reports only after the operato
 
 async function fileReport(h, c, description, category = "phishing") {
   h.cookies = new Map();
-  await h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, category, description, "orbit-verify-response": "good-token" }).toString(), headers: { "CF-Connecting-IP": "198.51.100.9" } });
+  await h.request("/report", { method: "POST", body: new URLSearchParams({ target: `app:${c.id}`, category, description }).toString(), headers: { "CF-Connecting-IP": "198.51.100.9" } });
   return h.db.prepare("SELECT * FROM reports WHERE description = ?").bind(description).first();
 }
 const pubOf = async (h, id) => h.db.prepare("SELECT * FROM publications WHERE report_id = ?").bind(id).first();

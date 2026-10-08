@@ -69,6 +69,10 @@ RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP�
 | `/demo/saml` | SAML 服务方演示 |
 | `POST /admin/sync` | 运营方立即同步登记表（Bearer 令牌） |
 
+## 部署覆盖层
+
+id.fadianro.am 的生产部署通过 `src/platform/` 应用部署覆盖层（样式、SEO、平台集成）；本仓库使用默认实现即可独立运行。该模块导出 `renderHead`、`replacesBaseStylesheet`、`stylesheets`、`hero`、`sitemap`、`robots`、`clientIp`、`notifyOperator`、`humanCheck`、`responseHeaders`、`pages`、`languagePaths`、`assetSizes` 与 `buildMarker`；部署时可在构建阶段替换为实现同一组导出的模块。
+
 ## 开发
 
 Node.js 22.5 或更高版本，无依赖。
