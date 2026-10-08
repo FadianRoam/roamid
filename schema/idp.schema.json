@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://id.fadianro.am/schema/idp.schema.json",
+  "title": "RoamID identity provider entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "protocol",
+    "name",
+    "issuer",
+    "homepage",
+    "contact",
+    "client_id",
+    "client_auth",
+    "scopes",
+    "status"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{2,32}$",
+      "description": "Permanent identifier. Also the file name and the callback path segment. Never changes."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "oidc"
+      ]
+    },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "zh": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "issuer": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 300
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 300
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "github",
+        "email"
+      ],
+      "properties": {
+        "github": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        }
+      }
+    },
+    "client_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "client_auth": {
+      "type": "string",
+      "enum": [
+        "private_key_jwt",
+        "client_secret_basic",
+        "client_secret_post"
+      ]
+    },
+    "client_assertion_aud": {
+      "type": "string",
+      "enum": [
+        "token_endpoint",
+        "issuer"
+      ],
+      "description": "Audience of the private_key_jwt assertion. Default token_endpoint."
+    },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[\\x21\\x23-\\x5B\\x5D-\\x7E]{1,100}$"
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which provider claim supplies each normalized claim. Defaults to the claim of the same name.",
+      "properties": {
+        "email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email_verified": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "preferred_username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "picture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      }
+    },
+    "email_domains": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "description": "Email domains this provider is authoritative for. Each is proven by a DNS TXT record _roamid.<domain> containing roamid-idp=<id>. \"*.example.org\" covers subdomains of example.org only.",
+      "items": {
+        "type": "string",
+        "maxLength": 253,
+        "pattern": "^(\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    }
+  }
+}

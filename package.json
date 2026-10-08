@@ -1,0 +1,15 @@
+{
+  "name": "roamid",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Community OpenID Connect broker with a public, pull-request maintained registry of identity providers and relying parties.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "build-registry": "node scripts/build-registry.mjs",
+    "keygen": "node scripts/keygen.mjs"
+  }
+}

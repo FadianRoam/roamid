@@ -1,0 +1,28 @@
+name: check
+
+# Pull requests: tests, registry rules, permanent identifiers, and a live
+# probe of every identity provider the pull request adds or changes. Runs
+# without secrets and with read-only permissions; the result is written to
+# the job summary.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Tests
+        run: node --test test/*.test.mjs
+      - name: Registry
+        run: node scripts/check.mjs --base "origin/${{ github.base_ref }}" --probe --summary "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,45 @@
+# Copy to wrangler.local.toml (git-ignored), fill in the placeholders, and
+# deploy with:  npx wrangler deploy -c wrangler.local.toml
+# The account is taken from CLOUDFLARE_ACCOUNT_ID or account_id below.
+
+name = "roamid"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+# account_id = "<your account id>"
+
+# Not served on workers.dev.
+workers_dev = false
+preview_urls = false
+
+# The Worker's own hostname (a custom domain). When a CDN or proxy sits in
+# front, this is the origin name and BASE_URL is the public name.
+routes = [
+  { pattern = "<origin hostname>", custom_domain = true },
+]
+
+[vars]
+BASE_URL = "https://<public hostname>"
+REGISTRY_URL = "https://fadianroam.github.io/roamid/registry.json"
+
+# Registry sync, domain proofs, health probes and clean-up every 5 minutes.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "roamid"
+database_id = "<database id>"
+migrations_dir = "migrations"
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[observability]
+enabled = true
+
+# Secrets (wrangler secret put <NAME> -c wrangler.local.toml):
+#   SIGNING_KEYS        JSON array of private JWKs, ES256 (scripts/keygen.mjs signing)
+#   CLIENT_KEYS         JSON array of private JWKs, RS256 or ES256 (scripts/keygen.mjs client)
+#   ADMIN_TOKEN         bearer token for POST /admin/sync
+#   CDN_KEY             key of the edge's signed origin header (optional)
+#   IDP_SECRET_<ID>     client secret at an identity provider that uses client_secret_*
