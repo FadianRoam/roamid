@@ -14,6 +14,7 @@
       "properties": { "en": { "type": "string", "minLength": 1, "maxLength": 80 }, "zh": { "type": "string", "minLength": 1, "maxLength": 80 } }
     },
     "homepage": { "type": "string", "format": "uri", "maxLength": 300 },
+    "domain": { "type": "string", "pattern": "^[a-z0-9.-]{4,253}$", "description": "The application's domain, proven by DNS TXT _roamid-app.<domain> = roamid-app=<client_id> or https://<domain>/.well-known/roamid-app.txt. Shown in the picker. Required for automatic merging." },
     "contact": {
       "type": "object", "additionalProperties": false, "required": ["github", "email"],
       "properties": {

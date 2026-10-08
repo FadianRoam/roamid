@@ -6,7 +6,10 @@ RoamID 是标准的 OpenID Connect Provider，任何经过认证的 OpenID Conne
 
 ## 1. 登记
 
-提交拉取请求，新增 `registry/clients/<client_id>.json`（见 [registry.md](registry.md)）。合并后约 5 分钟生效。字段：
+两种方式，经过同一套自动审核（第 12 节）：
+
+- **开发者控制台**（推荐）：在 `https://id.fadianro.am/console` 用 RoamID 本身登录，创建应用并证明域名；全部检查通过后应用立即启用。控制台显示 `client_id`，使用 `client_secret_*` 时只显示一次密钥。
+- **拉取请求**：新增 `registry/clients/<client_id>.json`（见 [registry.md](registry.md)）。只新增或修改应用条目、且通过自动审核的拉取请求会被自动合并，约 5 分钟后生效。以 `app-` 开头的 `client_id` 属于控制台，在此会被拒绝。字段：
 
 | 字段 | 规则 |
 |---|---|
@@ -18,6 +21,7 @@ RoamID 是标准的 OpenID Connect Provider，任何经过认证的 OpenID Conne
 | `jwks_uri` | 用于 `private_key_jwt`：公钥的 https 地址（RS256、PS256 或 ES256）。 |
 | `allowed_idps` | 可选，身份提供方 id 列表；不填则提供全部启用中的提供方。 |
 | `subject_type` | `public`（默认）或 `pairwise`。 |
+| `domain` | 应用的域名（第 12 节）。自动合并时必填，在选择页显示。 |
 
 ## 2. 端点
 
@@ -158,3 +162,48 @@ ID 令牌用 ES256 签名，公钥在 `/jwks.json`，带 `kid`，有效期 1 小
 | `urn:roamid:claims:sub` | `sub`（与 NameID 相同） |
 
 第 6 节的账户关联规则同样适用：按 NameID 建立账户；只有 `email_authority` 为 `authoritative` 时才可按邮箱关联已有账户。
+
+## 12. 自动审核、域名证明与限额
+
+应用不经人工审核。通过以下检查即上线；控制台与拉取请求作业使用同一份代码（`src/apps/checks.js`）。控制台逐项显示未通过的检查及其代码；拉取请求会收到列出原因的评论。
+
+| 检查 | 规则 | 代码 |
+|---|---|---|
+| 名称 | 2 至 60 个字符；字母、数字、空格与 `- _ . & ' ( )` | `name_length`、`name_chars` |
+| 名称 | 不含域名（如 `example.com`） | `name_domain` |
+| 名称 | 不混用拉丁字母与西里尔或希腊字母 | `name_mixed_script` |
+| 名称 | 不与保留名称（[policy/reserved-names.json](../../policy/reserved-names.json)）过于相近：按形近字骨架比较（`0`→`o`、`rn`→`m`、西里尔 `о`→`o` 等），五个字符及以上的保留名称作为名称的一部分比较，较短的按整词比较 | `name_reserved` |
+| 名称 | 骨架不与其他身份提供方或应用相同 | `name_taken` |
+| 域名 | 主机名，如 `example.com`；不能是 IP 地址 | `domain_invalid` |
+| 域名 | 不是被封禁应用的域名（或其子域名） | `domain_banned` |
+| 域名与地址 | 主机不在 RoamID 每天载入的公开黑名单（URLhaus、OpenPhish）中 | `reputation` |
+| 回调、注销与 ACS 地址 | 精确；https；不含账户信息、片段或通配符；主机名而非 IP 地址；为该域名或其子域名；主机能在公网 DNS 解析 | `url_https`、`url_userinfo`、`url_fragment`、`url_wildcard`、`url_ip`、`url_off_domain`、`host_unresolved` |
+| 开发模式 | `http://localhost`、`http://127.0.0.1`、`http://[::1]` 仅限开发模式 | `url_localhost_active` |
+| 主页 | https，在该域名下 | `url_off_domain` |
+| 域名证明 | 见下文 | `domain_unproven`（拉取请求） |
+
+**域名证明。** 发布以下之一：
+
+```
+_roamid-app.example.com.  TXT  "roamid-app=<client_id>"
+https://example.com/.well-known/roamid-app.txt   含一行  <client_id>
+```
+
+控制台在创建时、点击「立即检查」时、证明缺失期间每 15 分钟、此后每天检查一次。证明消失后登录继续 72 小时，之后以 `app_unverified` 拒绝，直到证明恢复。选择页在应用名称旁显示已证明的域名，它告诉用户正在登录的是哪个站点。
+
+**控制台应用的状态。**
+
+| 状态 | 含义 |
+|---|---|
+| `development` | 有回调地址在 localhost，或域名尚未证明。只有所有者与共同所有者（最多 10 位）可以登录，其他人得到 `app_development`。 |
+| `active` | 全部检查通过且域名已证明，任何人都可以登录。 |
+| `suspended` | 运营方设置并注明原因。在选择页之前拒绝登录（`app_suspended`），应用收到 `access_denied`，`/token` 拒绝该应用。所有者可在控制台申诉。 |
+| `banned` | 运营方对违法站点设置。与 `suspended` 相同，但不把用户送回应用，其域名不能再用于新应用。 |
+
+**限额。** 每人最多 10 个应用；全局每天最多 200 个新应用；新应用前 7 天每天最多 500 次登录（`app_new_limit`，以 `temporarily_unavailable` 返回），运营方可提前解除。
+
+**密钥。** 控制台只保存客户端密钥的 SHA-256，密钥只显示一次。「生成新的客户端密钥」后上一个密钥继续有效，直到「吊销上一个密钥」，服务器可以无中断切换。
+
+**所有者。** 创建者为所有者，以其登录的 RoamID public `sub` 识别。所有者按对方 RoamID 登录的邮箱地址邀请共同所有者：控制台生成一个 7 天内有效、只能使用一次、只有该邮箱的登录才能接受的链接。所有者可以把所有权转移给共同所有者。
+
+举报与申诉：[policy.md](policy.md)。

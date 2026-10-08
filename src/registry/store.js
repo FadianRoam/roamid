@@ -28,7 +28,23 @@ function shape(row) {
 
 export function resetMemo() { memo = null; }
 
+// The registry with the operator's emergency overrides applied: an
+// identity provider disabled by the operator reads as status "disabled"
+// everywhere, without waiting for a registry change.
 export async function getRegistry(env) {
+  const reg = await loadRegistry(env);
+  let ov;
+  try { ov = (await env.DB.prepare("SELECT idp, reason FROM idp_overrides WHERE disabled = 1").all()).results || []; } catch { ov = []; }
+  if (!ov.length) return reg;
+  const idps = new Map(reg.idps);
+  for (const o of ov) {
+    const i = idps.get(o.idp);
+    if (i) idps.set(o.idp, { ...i, status: "disabled", override: { reason: o.reason || null } });
+  }
+  return { ...reg, idps };
+}
+
+async function loadRegistry(env) {
   if (memo && now() - memo.at < MEMO_TTL) return memo.value;
   let row = await env.DB.prepare("SELECT * FROM registry_cache WHERE id = 1").first();
   if (!row) {

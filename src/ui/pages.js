@@ -33,7 +33,7 @@ function nav({ lang, theme, path, active }) {
   const other = lang === "zh" ? "en" : "zh";
   const otherLabel = other === "zh" ? "中文" : "English";
   const links = [
-    ["/idps", t(lang, "nav_idps_short"), "idps"], [DOCS[lang], t(lang, "nav_docs"), "docs"],
+    ["/idps", t(lang, "nav_idps_short"), "idps"], ["/apps", t(lang, "nav_apps"), "apps"], [DOCS[lang], t(lang, "nav_docs"), "docs"],
     ["/status", t(lang, "nav_status"), "status"], [REPO, t(lang, "nav_source"), "github"],
   ];
   const a = ([h, l, k]) => `<a href="${esc(h)}"${active === k ? ' aria-current="page"' : ""}>${esc(l)}</a>`;
@@ -77,8 +77,8 @@ ${body}
 
 const band = () => `<div class="band" aria-hidden="true"><video muted loop playsinline preload="metadata" poster="${ASSETS["poster.webp"]}"><source src="${ASSETS["band.mp4"]}" type="video/mp4"></video></div>`;
 
-function contentPage({ lang, theme, path, active, title, body, narrow = false }) {
-  const foot = `<footer class="foot"><a href="/">RoamID</a><a href="/idps">${esc(t(lang, "nav_idps"))}</a><a href="/status">${esc(t(lang, "nav_status"))}</a><a href="/demo">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></footer>`;
+export function contentPage({ lang, theme, path, active, title, body, narrow = false }) {
+  const foot = `<footer class="foot"><a href="/">RoamID</a><a href="/idps">${esc(t(lang, "nav_idps"))}</a><a href="/status">${esc(t(lang, "nav_status"))}</a><a href="/apps">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="/report">${esc(t(lang, "rep_title"))}</a><a href="/demo">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></footer>`;
   return doc({ lang, theme, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${foot}</div>` });
 }
 
@@ -120,12 +120,13 @@ export function pickerPage({ lang, theme, path, tx, client, redirectUri, idps, l
   };
   const card = idps.length ? `<form class="card picker" method="post" action="/select">
 <input type="hidden" name="tx" value="${esc(tx)}">
-<div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b><span class="host">${esc(hostOf(redirectUri))}</span></div>
+<div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b><span class="host">${esc(client.domain || hostOf(redirectUri))}</span></div>
 <label class="search">${icon("search")}<input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="${esc(t(lang, "pick_search"))}" aria-label="${esc(t(lang, "pick_search"))}"></label>
 <ul class="rows" role="radiogroup" aria-label="${esc(t(lang, "pick_list"))}">${ordered.map(row).join("")}</ul>
 <div class="empty none" hidden>${esc(t(lang, "pick_none"))}</div>
 <div class="actions"><a class="cancel" href="${esc(cancelUrl)}">${esc(t(lang, "pick_cancel_short"))}</a><button class="pill" type="submit" id="continue">${esc(t(lang, "pick_continue"))}</button></div>
 <p class="fine">${esc(t(lang, "pick_note", { rp }))}</p>
+${client.builtin ? "" : `<a class="report-link" href="/report?app=${encodeURIComponent(client.client_id)}&amp;tx=${encodeURIComponent(tx)}" id="report-link">${esc(t(lang, "pick_report"))}</a>`}
 </form>` : `<div class="card"><div class="ctx"><span>${esc(t(lang, "pick_to"))}</span><b>${esc(rp)}</b></div><div class="empty">${esc(t(lang, "pick_empty"))}</div><div class="actions"><a class="cancel" href="${esc(cancelUrl)}">${esc(t(lang, "pick_cancel_short"))}</a></div></div>`;
   const body = `<div class="hero" data-page="picker"><div class="stage">
 ${nav({ lang, theme, path, active: "" })}
@@ -138,7 +139,7 @@ ${nav({ lang, theme, path, active: "" })}
 
 // ---- content pages -------------------------------------------------------------
 
-const hiddenFields = (fields) => Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
+export const hiddenFields = (fields) => Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
 
 // The page that carries a SAML message to a service provider by HTTP-POST.
 // assets/roamid.js submits it on load; without JavaScript the button does.
@@ -160,7 +161,7 @@ export function messagePage({ lang, theme, path, title, lead }) {
   return contentPage({ lang, theme, path, active: "", title, narrow: true, body: `<h1 class="title">${esc(title)}</h1><p class="lead">${esc(lead)}</p><div class="btnrow"><a class="pill ghost" href="/">RoamID</a></div>` });
 }
 
-function healthBadge(lang, idp, h) {
+export function healthBadge(lang, idp, h) {
   if (idp.status === "disabled") return `<span class="badge">${esc(t(lang, "disabled"))}</span>`;
   const cls = h === "up" ? "ok" : h === "degraded" ? "warn" : h === "down" ? "bad" : "";
   return `<span class="badge ${cls}"><span class="dot ${dotClass(h)}"></span>${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}</span>`;

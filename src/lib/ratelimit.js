@@ -10,6 +10,8 @@ export const LIMITS = {
   client: { n: 600, win: 60 },      // /token per client_id
   userinfo: { n: 300, win: 60 },
   admin: { n: 10, win: 60 },
+  console: { n: 30, win: 60 },     // console form posts per person
+  report: { n: 5, win: 3600 },     // reports per address per hour
 };
 
 // true when the request may proceed.

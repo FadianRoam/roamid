@@ -19,7 +19,7 @@ registry/clients/<client_id>.json  applications         schema/client.schema.jso
    ```
 3. Open a pull request with the matching template: identity provider or application.
 4. CI runs the tests, the schema and rule checks, the permanent-identifier check against `main`, and for identity providers a live probe of the discovery document and the email domain TXT records. The result is in the job summary of the `check` workflow.
-5. A maintainer reviews and merges. Within about 5 minutes the entry is published at `https://fadianroam.github.io/roamid/registry.json` and loaded by RoamID. `/status` shows the commit in use.
+5. Identity providers: a maintainer reviews and merges. Applications: a pull request that only adds or changes `registry/clients/*.json` is merged automatically when the `check` workflow passed and every entry passes the automated review ([rp-integration.md](rp-integration.md) section 12), domain proof included; a change to an existing application must come from the GitHub account in its `contact.github`. Otherwise the `automerge` job comments with the reasons and a maintainer can still review it. The job runs on this repository with `main` checked out; it reads the pull request through the GitHub API and never runs its code. Within about 5 minutes the entry is published at `https://fadianroam.github.io/roamid/registry.json` and loaded by RoamID. `/status` shows the commit in use.
 
 An identity provider entry with `client_auth` `client_secret_basic` or `client_secret_post` is only usable after its secret has been handed to the operator (see [idp-requirements.md](idp-requirements.md) section 2).
 

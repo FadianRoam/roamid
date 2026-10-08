@@ -14,8 +14,9 @@ import { authorizeUrl, completeLogin, normalize, subjectFor, verifyWithJwks, Ups
 import { pickLang, pickTheme, localName, t } from "../ui/i18n.js";
 import { pickerPage, errorPage, messagePage, postPage } from "../ui/pages.js";
 import { samlStart, samlLogin, readSamlPost } from "../saml/sp.js";
-import { readAuthnRequest, successForm, errorForm, samlStatusFor, samlSp } from "../saml/idp.js";
+import { readAuthnRequest, successForm, errorForm, samlStatusFor, ST } from "../saml/idp.js";
 import { SamlError } from "../saml/xml.js";
+import { resolveClient, resolveSamlSp, isOwner } from "../apps/store.js";
 
 export const TX_TTL = 600;
 export const CODE_TTL = 60;
@@ -99,9 +100,12 @@ function back(env, tx, error, description) {
   return { url: rpError(env, tx, error, description) };
 }
 
-function activeClient(reg, clientId, proto = "oidc") {
-  const c = reg.clients.get(String(clientId || ""));
-  return c && c.status === "active" && c.protocol === proto ? c : null;
+// A console application that may not be used right now: refused before the
+// picker, with an error page. A suspended or unverified application gets the
+// standard error back; a banned one does not (its site is not linked).
+function refuseApp(request, env, client, gate, backTo, uiLocales) {
+  const rpName = localName(client, pickLang(request, { uiLocales }));
+  return errorHtml(request, gate, { status: 403, back: gate === "app_banned" ? null : backTo, rpName: gate === "app_banned" ? null : rpName, uiLocales, detail: client.app && client.app.reason ? client.app.reason : undefined });
 }
 
 // The IdPs a client may use, in registry order.
@@ -132,12 +136,14 @@ export async function authorize(request, env) {
   const reg = await getRegistry(env);
   if (!reg.commit) return errorHtml(request, "registry_unavailable", { status: 503 });
   const uiLocales = q.get("ui_locales");
-  const client = activeClient(reg, q.get("client_id"));
+  const rc = await resolveClient(env, reg, q.get("client_id"));
+  const client = rc && rc.client;
   if (!client) return errorHtml(request, "invalid_client", { detail: `client_id: ${String(q.get("client_id") || "").slice(0, 80)}`, uiLocales });
   const redirectUri = q.get("redirect_uri") || "";
   if (!client.redirect_uris.includes(redirectUri)) return errorHtml(request, "invalid_redirect_uri", { detail: redirectUri.slice(0, 200), uiLocales });
   const state = q.get("state");
   const back = (error, description) => redirect(rpRedirect(env, redirectUri, { error, error_description: description, state }));
+  if (rc.gate) return refuseApp(request, env, client, rc.gate, { url: rpRedirect(env, redirectUri, { error: "access_denied", error_description: `roamid:${rc.gate}`, state }) }, uiLocales);
   for (const k of ["client_id", "redirect_uri", "response_type", "scope", "state", "nonce", "code_challenge", "code_challenge_method", "prompt", "max_age", "login_hint", "ui_locales", "acr_values", "idp_hint", "response_mode"]) {
     if (q.getAll(k).length > 1) return back("invalid_request", `${k} repeated`);
   }
@@ -216,8 +222,8 @@ async function goUpstream(request, env, tx, idp, binding, cookies = []) {
   } catch (e) {
     const code = e instanceof UpstreamError || e instanceof SamlError ? e.code : "server_error";
     await count(env, "failed", { idp: idp.id, client: tx.client_id, code });
-    const reg = await getRegistry(env);
-    const client = reg.clients.get(tx.client_id);
+    const rc = await resolveClient(env, await getRegistry(env), tx.client_id, tx.proto);
+    const client = rc && rc.client;
     return errorHtml(request, code, { status: 502, detail: e.message, back: back(env, tx, "temporarily_unavailable", `roamid:${code}`), rpName: localName(client, pickLang(request)), uiLocales: tx.ui_locales });
   }
   if (idp.protocol !== "saml2" && tx.acr_values) { const u = new URL(up.url); u.searchParams.set("acr_values", tx.acr_values); up.url = u.toString(); }
@@ -237,8 +243,10 @@ export async function select(request, env) {
   if (!tx || tx.idp) return errorHtml(request, "tx_expired");
   if (!(await bindingOk(request, tx))) return errorHtml(request, "tx_browser");
   const reg = await getRegistry(env);
-  const client = activeClient(reg, tx.client_id, tx.proto);
+  const rc = await resolveClient(env, reg, tx.client_id, tx.proto);
+  const client = rc && rc.client;
   if (!client) return errorHtml(request, "invalid_client");
+  if (rc.gate) return refuseApp(request, env, client, rc.gate, back(env, tx, "access_denied", `roamid:${rc.gate}`), tx.ui_locales);
   const allowed = idpsFor(reg, client);
   const lang = pickLang(request, { uiLocales: tx.ui_locales });
   if (request.method === "POST") {
@@ -275,8 +283,10 @@ export async function callback(request, env, idpId) {
   const del = await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
   if (!del.meta || del.meta.changes !== 1) return errorHtml(request, "tx_expired");
   const reg = await getRegistry(env);
-  const client = activeClient(reg, tx.client_id, tx.proto);
+  const rc = await resolveClient(env, reg, tx.client_id, tx.proto);
+  const client = rc && rc.client;
   if (!client) return errorHtml(request, "invalid_client");
+  if (rc.gate) return refuseApp(request, env, client, rc.gate, back(env, tx, "access_denied", `roamid:${rc.gate}`), tx.ui_locales);
   const rpName = localName(client, pickLang(request, { uiLocales: tx.ui_locales }));
   const fail = async (code, detail, rpErr = "server_error") => {
     await count(env, "failed", { idp: idpId, client: tx.client_id, code });
@@ -318,6 +328,13 @@ function deliverForm(request, tx, rpName, form) {
 // and hand the result to the service (an authorization code, or a SAML
 // Response posted to its ACS URL).
 export async function finishLogin(request, env, tx, client, idp, upstreamSub, claims, rpName) {
+  if (client.app) {
+    const stop = await appSignInStop(env, client, idp, upstreamSub);
+    if (stop) {
+      await count(env, "failed", { idp: idp.id, client: tx.client_id, code: stop });
+      return errorHtml(request, stop, { status: 403, back: back(env, tx, stop === "app_new_limit" ? "temporarily_unavailable" : "access_denied", `roamid:${stop}`), rpName, uiLocales: tx.ui_locales });
+    }
+  }
   const sub = await subjectFor(idp.id, upstreamSub, client, client.subject_type === "pairwise" ? sectorOf(client) : null);
   const t0 = now();
   const full = { sub, idp: idp.id, idp_name: idp.name.en, ...claims, auth_time: claims.auth_time || t0 };
@@ -334,6 +351,26 @@ export async function finishLogin(request, env, tx, client, idp, upstreamSub, cl
   return redirect(rpRedirect(env, tx.redirect_uri, { code: ourCode, state: tx.state }));
 }
 
+export const NEW_APP_DAYS = 7;
+export const NEW_APP_DAILY = 500;
+
+// Console applications: development mode admits only the owners (by their
+// public RoamID sub, whatever the app's subject type); a new application
+// has a daily sign-in limit for its first days.
+async function appSignInStop(env, client, idp, upstreamSub) {
+  const a = client.app;
+  if (a.status === "development") {
+    const publicSub = await subjectFor(idp.id, upstreamSub, { subject_type: "public" }, null);
+    return (await isOwner(env, client.client_id, publicSub)) ? null : "app_development";
+  }
+  if (a.status === "active" && !a.limit_lifted && a.active_since && now() - a.active_since < NEW_APP_DAYS * 86400) {
+    const day = new Date().toISOString().slice(0, 10);
+    const r = await env.DB.prepare("SELECT SUM(n) AS n FROM events WHERE day = ? AND kind = 'completed' AND client_id = ?").bind(day, client.client_id).first();
+    if (r && r.n >= NEW_APP_DAILY) return "app_new_limit";
+  }
+  return null;
+}
+
 // ---- SAML: /saml/acs/<idp> (from identity providers) -------------------------
 
 export async function samlAcs(request, env, idpId) {
@@ -348,8 +385,10 @@ export async function samlAcs(request, env, idpId) {
   const del = await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
   if (!del.meta || del.meta.changes !== 1) return errorHtml(request, "tx_expired");
   const reg = await getRegistry(env);
-  const client = activeClient(reg, tx.client_id, tx.proto);
+  const rc = await resolveClient(env, reg, tx.client_id, tx.proto);
+  const client = rc && rc.client;
   if (!client) return errorHtml(request, "invalid_client");
+  if (rc.gate) return refuseApp(request, env, client, rc.gate, back(env, tx, "access_denied", `roamid:${rc.gate}`), tx.ui_locales);
   const rpName = localName(client, pickLang(request, { uiLocales: tx.ui_locales }));
   const fail = async (code, detail, rpErr = "server_error") => {
     await count(env, "failed", { idp: idpId, client: tx.client_id, code });
@@ -378,9 +417,10 @@ export async function samlSso(request, env) {
   let ar;
   if (request.method === "GET" && url.searchParams.get("sp") && !url.searchParams.get("SAMLRequest")) {
     // IdP-initiated: no AuthnRequest, the first registered ACS URL.
-    const sp = samlSp(reg, url.searchParams.get("sp"), { byClientId: true });
-    if (!sp) return errorHtml(request, "invalid_client", { detail: `sp: ${url.searchParams.get("sp").slice(0, 80)}` });
-    ar = { sp, requestId: null, acs: sp.acs_urls[0], relayState: (url.searchParams.get("RelayState") || "").slice(0, 1024) || null, prompt: null };
+    const rc = await resolveClient(env, reg, url.searchParams.get("sp"), "saml2");
+    if (!rc) return errorHtml(request, "invalid_client", { detail: `sp: ${url.searchParams.get("sp").slice(0, 80)}` });
+    const sp = rc.client;
+    ar = { sp, gate: rc.gate, requestId: null, acs: sp.acs_urls[0], relayState: (url.searchParams.get("RelayState") || "").slice(0, 1024) || null, prompt: null };
   } else {
     try {
       ar = await readAuthnRequest(request, env);
@@ -392,6 +432,7 @@ export async function samlSso(request, env) {
       return errorHtml(request, e instanceof SamlError ? e.code : "saml_request", { detail: e.message });
     }
   }
+  if (ar.gate) return refuseApp(request, env, ar.sp, ar.gate, { form: errorForm(env, { acs: ar.acs, requestId: ar.requestId, relayState: ar.relayState, status: ST.requester, sub: ST.denied, message: `roamid:${ar.gate}` }) });
   const allowed = idpsFor(reg, ar.sp);
   const hint = url.searchParams.get("idp_hint");
   let chosen = hint ? allowed.find((i) => i.id === hint) || null : null;
@@ -410,9 +451,8 @@ export async function samlCancel(request, env) {
   if (!tx || tx.proto !== "saml2" || tx.idp) return errorHtml(request, "tx_expired");
   if (!(await bindingOk(request, tx))) return errorHtml(request, "tx_browser");
   await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
-  const reg = await getRegistry(env);
-  const client = reg.clients.get(tx.client_id);
-  return deliverForm(request, tx, localName(client, pickLang(request)), back(env, tx, "access_denied", "the user cancelled").form);
+  const rc = await resolveClient(env, await getRegistry(env), tx.client_id, tx.proto);
+  return deliverForm(request, tx, localName(rc && rc.client, pickLang(request)), back(env, tx, "access_denied", "the user cancelled").form);
 }
 
 // ---- /token ----------------------------------------------------------------
@@ -444,11 +484,15 @@ async function authenticateClient(request, env, reg, form) {
   } else {
     method = "none"; clientId = form.get("client_id");
   }
-  const client = activeClient(reg, clientId);
+  const rc = await resolveClient(env, reg, clientId);
+  const client = rc && rc.client;
   if (!client) return { error: tokenError("invalid_client", "unknown or disabled client", 401) };
+  if (rc.gate) return { error: tokenError("invalid_client", `roamid:${rc.gate}`, 401) };
   if (client.token_endpoint_auth_method !== method) return { error: tokenError("invalid_client", `this client authenticates with ${client.token_endpoint_auth_method}`, 401) };
   if (method === "client_secret_basic" || method === "client_secret_post") {
-    if (!secret || !safeEqual(await sha256hex(secret), client.client_secret_sha256)) return { error: tokenError("invalid_client", "client authentication failed", 401, method === "client_secret_basic" ? { "WWW-Authenticate": 'Basic realm="roamid"' } : {}) };
+    const h = secret ? await sha256hex(secret) : "";
+    // During a rotation the previous secret works until the owner revokes it.
+    if (!secret || !(safeEqual(h, client.client_secret_sha256 || "") || (client.client_secret_sha256_old && safeEqual(h, client.client_secret_sha256_old)))) return { error: tokenError("invalid_client", "client authentication failed", 401, method === "client_secret_basic" ? { "WWW-Authenticate": 'Basic realm="roamid"' } : {}) };
   }
   if (method === "private_key_jwt") {
     const err = await checkAssertion(env, client, form.get("client_assertion"));
@@ -573,7 +617,8 @@ export async function logout(request, env) {
       if (clientId && clientId !== aud) clientId = null; else clientId = aud;
     } catch { clientId = null; }
   }
-  const client = activeClient(reg, clientId);
+  const rc = clientId ? await resolveClient(env, reg, clientId) : null;
+  const client = rc && !rc.gate ? rc.client : null;
   const plr = q.get("post_logout_redirect_uri");
   if (plr && client && (client.post_logout_redirect_uris || []).includes(plr)) {
     const u = new URL(plr);

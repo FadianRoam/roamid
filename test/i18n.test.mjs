@@ -13,7 +13,7 @@ test("zh UI strings: no ASCII , . : ; ? ! ( ) next to CJK characters", () => {
 });
 
 test("zh documents: the same rule outside code", () => {
-  for (const f of ["README.zh-CN.md", "docs/zh-CN/rp-integration.md", "docs/zh-CN/idp-requirements.md", "docs/zh-CN/registry.md"]) {
+  for (const f of ["README.zh-CN.md", "docs/zh-CN/rp-integration.md", "docs/zh-CN/idp-requirements.md", "docs/zh-CN/registry.md", "docs/zh-CN/policy.md"]) {
     let fence = false;
     readFileSync(new URL(`../${f}`, import.meta.url), "utf8").split("\n").forEach((line, i) => {
       if (line.trim().startsWith("```")) { fence = !fence; return; }

@@ -28,6 +28,10 @@ Set with `npx wrangler secret put <NAME> -c wrangler.local.toml`. Keep an offlin
 | `ADMIN_TOKEN` | bearer token for `POST /admin/sync` |
 | `CDN_KEY` | key of the edge's signed origin header (`X-Orbit-Origin-Sig`); without it the client address is the one Cloudflare reports |
 | `IDP_SECRET_<ID>` | client secret at an identity provider using `client_secret_*` (`<ID>`: id in upper case, `-` as `_`) |
+| `SAML_KEYS` | JSON array of `{kid, cert, key}` (PEM), SAML signing and encryption |
+| `OPERATOR_SUBS` | RoamID public `sub` values (comma or space separated) allowed into `/admin/reports` |
+| `VERIFY_SECRET` | Orbit Verify site secret for the report form (`VERIFY_SITEKEY` is a plain variable) |
+| `HELPDESK_API_KEY` | key for the operator's help desk (`HELPDESK_URL` is a plain variable); without it new reports are only in the queue |
 
 ## Key rotation / 密钥轮换
 

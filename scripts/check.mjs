@@ -17,6 +17,7 @@ import { discoveryProblems } from "../src/oidc/upstream.js";
 import { parseIdpMetadata } from "../src/saml/build.js";
 import { certInfo } from "../src/saml/certs.js";
 import { proveDomain } from "../src/registry/domains.js";
+import { reviewClients } from "./review-clients.mjs";
 
 const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
@@ -34,6 +35,7 @@ for (const d of dropped) errors.push(`${d.kind} ${d.id}: ${d.errors.join("; ")}`
 report.push(`Entries: ${idps.length} identity providers, ${clients.length} clients.`);
 
 let changed = idps;
+let beforeClients = new Map();
 if (base) {
   const baseFiles = readRevision(base);
   if (!baseFiles) {
@@ -42,6 +44,7 @@ if (base) {
     errors.push(...checkImmutable(idsOf(baseFiles), idsOf(files)));
     const before = new Map(baseFiles.filter((f) => f.kind === "idps" && f.json).map((f) => [f.json.id, JSON.stringify(f.json)]));
     changed = idps.filter((i) => before.get(i.id) !== JSON.stringify(i));
+    beforeClients = new Map(baseFiles.filter((f) => f.kind === "clients" && f.json).map((f) => [f.json.client_id, JSON.stringify(f.json)]));
   }
 }
 
@@ -72,6 +75,16 @@ if (probe) {
     }
   }
   if (!changed.length) report.push("No identity provider added or changed.");
+  // Applications added or changed: the automated review that decides an
+  // automatic merge. Its findings are reported, not counted as errors here
+  // (a maintainer can still merge by hand).
+  const changedClients = clients.filter((c) => beforeClients.get(c.client_id) !== JSON.stringify(c));
+  if (changedClients.length) {
+    report.push("", "Automated application review (automatic merge needs every application to pass):");
+    for (const r of await reviewClients(changedClients, head)) {
+      report.push(r.errors.length ? `- ${r.id}: not eligible: ${r.errors.map((e) => `${e.field}: ${e.message}`).join("; ")}` : `- ${r.id}: ${r.note || "passed, domain proven"}`);
+    }
+  }
 }
 
 // A SAML identity provider: its metadata (or the inline values) and its

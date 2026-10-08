@@ -19,6 +19,8 @@ import { homePage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
 import { demoPage } from "./ui/demo.js";
 import { VERSION } from "./version.js";
 import { serveAssetWithRange } from "./lib/range.js";
+import { handleConsole, handleApps, handleReport, handleAdmin } from "./console/routes.js";
+import { recheckApps, refreshBlocklists } from "./apps/review.js";
 
 const PUBLIC_CACHE = "public, max-age=300";
 
@@ -125,6 +127,10 @@ export async function handle(request, env, ctx) {
   if (p === "/demo/saml/start" && m === "GET") return demoSamlStart(env);
   if (p === "/demo/saml/acs" && m === "POST") return demoSamlAcs(request, env, view(request));
   if (p === "/prefs" && m === "GET") return prefs(request);
+  if (p === "/console" || p.startsWith("/console/")) { const r = await handleConsole(request, env, p); if (r) return r; }
+  if (p === "/report") { const r = await handleReport(request, env); if (r) return r; }
+  if (p === "/admin/reports" || p.startsWith("/admin/target")) { const r = await handleAdmin(request, env, p); if (r) return r; }
+  if ((p === "/apps" || p === "/apps.json" || p.startsWith("/apps/")) && (m === "GET" || m === "HEAD")) { const r = await handleApps(request, env, p); if (r) return r; }
   if (m !== "GET" && m !== "HEAD") return json({ error: "method_not_allowed" }, { status: 405 });
   if (p === "/idps.json") {
     const reg = await getRegistry(env);
@@ -144,7 +150,7 @@ export async function handle(request, env, ctx) {
   if (p === "/status") return html(statusPage({ ...v, s: await statusData(env) }), { nonce: v.nonce });
   if (p === "/demo" || p === "/demo/callback") return html(demoPage(v));
   if (p === "/demo/saml") return demoSamlPage(v);
-  if (p === "/robots.txt") return text("User-agent: *\nDisallow: /authorize\nDisallow: /select\nDisallow: /callback/\nDisallow: /demo/callback\n", { cache: PUBLIC_CACHE });
+  if (p === "/robots.txt") return text("User-agent: *\nDisallow: /authorize\nDisallow: /select\nDisallow: /callback/\nDisallow: /demo/callback\nDisallow: /console\nDisallow: /admin\nDisallow: /report\n", { cache: PUBLIC_CACHE });
   if (p === "/favicon.ico") return new Response(null, { status: 204, headers: { "Cache-Control": PUBLIC_CACHE } });
   return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404, nonce: v.nonce });
 }
@@ -155,12 +161,16 @@ export async function scheduled(env) {
   const reg = await getRegistry(env);
   await checkDomainProofs(env, reg).catch((e) => console.error("[cron] domains", e && e.message));
   await probeIdps(env, reg).catch((e) => console.error("[cron] health", e && e.message));
+  await recheckApps(env).catch((e) => console.error("[cron] apps", e && e.message));
+  await refreshBlocklists(env).catch((e) => console.error("[cron] blocklists", e && e.message));
   await env.DB.batch([
     env.DB.prepare("DELETE FROM tx WHERE expires <= ?").bind(t),
     env.DB.prepare("DELETE FROM codes WHERE expires <= ?").bind(t - 3600),
     env.DB.prepare("DELETE FROM tokens WHERE expires <= ?").bind(t),
     env.DB.prepare("DELETE FROM ratelimit WHERE expires <= ?").bind(t),
     env.DB.prepare("DELETE FROM jti WHERE expires <= ?").bind(t),
+    env.DB.prepare("DELETE FROM console_sessions WHERE expires <= ?").bind(t),
+    env.DB.prepare("DELETE FROM app_invites WHERE expires <= ?").bind(t),
     env.DB.prepare("DELETE FROM events WHERE day < ?").bind(new Date((t - 400 * 86400) * 1000).toISOString().slice(0, 10)),
   ]);
 }

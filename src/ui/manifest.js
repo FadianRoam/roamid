@@ -7,7 +7,7 @@ export const ASSETS = {
   "mark.svg": "/assets/mark.a16ec2317e.svg",
   "boot.js": "/assets/boot.2d7f7354b4.js",
   "roamid.js": "/assets/roamid.3b9a1bd2bc.js",
-  "roamid.css": "/assets/roamid.6ef9ba9c39.css"
+  "roamid.css": "/assets/roamid.a1cc78eca5.css"
 };
 // Byte sizes of the files served with ranges (the assets binding streams without Content-Length).
 export const SIZES = {

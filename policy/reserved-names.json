@@ -1,0 +1,12 @@
+{
+  "description": "Names an application may not use or imitate (compared by confusable skeleton, as a whole name or as a part of one). Changes by pull request; reviewed by the operator.",
+  "names": [
+    "RoamID", "FadianRoam", "Fadian Roam", "YunZheng", "Orbit",
+    "Google", "Gmail", "YouTube", "Microsoft", "Outlook", "Office 365", "Azure", "Apple", "iCloud", "GitHub", "GitLab",
+    "Facebook", "Meta", "Instagram", "WhatsApp", "Twitter", "Telegram", "Discord", "Slack", "Zoom", "Amazon", "PayPal", "Stripe",
+    "Alipay", "WeChat", "Tencent", "QQ", "Alibaba", "Taobao", "Baidu", "Weibo", "Bilibili", "Douyin", "TikTok", "ByteDance", "Huawei", "Xiaomi",
+    "Cloudflare", "Okta", "Auth0", "Keycloak", "Login.gov", "eduroam", "Shibboleth", "InCommon",
+    "Bank", "Banking", "Wallet", "Binance", "Coinbase", "Visa", "Mastercard", "UnionPay",
+    "银行", "支付宝", "微信", "腾讯", "阿里巴巴", "淘宝", "百度", "微博", "华为", "小米", "抖音", "云峥", "发电漫游"
+  ]
+}

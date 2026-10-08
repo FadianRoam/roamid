@@ -39,6 +39,11 @@ RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error
 | `saml_status` | The identity provider reported an error. | 身份提供方报告了错误。 |
 | `saml_metadata` | The identity provider's SAML metadata could not be loaded or has expired. | 无法载入身份提供方的 SAML 元数据，或元数据已过期。 |
 | `saml_invalid_response` | The identity provider's SAML response could not be processed. | 无法处理身份提供方的 SAML 响应。 |
+| `app_suspended` | This application is suspended. Sign-in is not possible. | 此应用已被暂停，无法登录。 |
+| `app_banned` | This application is banned. Sign-in is not possible. | 此应用已被封禁，无法登录。 |
+| `app_unverified` | This application's domain is not verified. Sign-in is not possible until its owner restores the proof. | 此应用的域名未验证，在所有者恢复证明前无法登录。 |
+| `app_development` | This application is in development mode. Only its owners can sign in. | 此应用处于开发模式，只有其所有者可以登录。 |
+| `app_new_limit` | This new application has reached its daily sign-in limit. Try again tomorrow. | 此新应用今天的登录次数已达上限，请明天再试。 |
 
 Errors that an identity provider returns are counted as `upstream_<error>` and passed to the application as described in rp-integration.md.
 

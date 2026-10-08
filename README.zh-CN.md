@@ -35,6 +35,7 @@ RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP�
 | [docs/zh-CN/rp-integration.md](docs/zh-CN/rp-integration.md) | 应用：端点、客户端认证、声明、错误、示例、账户关联 |
 | [docs/zh-CN/idp-requirements.md](docs/zh-CN/idp-requirements.md) | 身份提供方：兼容要求、回调地址、客户端认证、邮箱域名 |
 | [docs/zh-CN/registry.md](docs/zh-CN/registry.md) | 通过拉取请求新增或修改登记条目 |
+| [docs/zh-CN/policy.md](docs/zh-CN/policy.md) | 可接受使用、举报、运营方处理、申诉 |
 | [docs/errors.md](docs/errors.md) | 错误码（中英对照） |
 | [docs/operations.md](docs/operations.md) | 运行实例：部署、密钥、轮换（中英） |
 | [CONTRIBUTING.md]（CONTRIBUTING.md）、[SECURITY.md]（SECURITY.md）、[CHANGELOG.md](CHANGELOG.md) | |
@@ -57,6 +58,10 @@ RoamID 对应用是 OpenID Provider，对社区身份提供方是依赖方（RP�
 | `/status`、`/status.json` | 登记表提交、域名证明、提供方健康、密钥、每日计数 |
 | `/saml/idp/metadata.xml`、`/saml/idp/sso` | 面向 SAML 服务方的 SAML 2.0 身份提供方 |
 | `/saml/sp/metadata.xml`、`/saml/acs/<idp-id>` | 面向 SAML 身份提供方的 SAML 2.0 服务方 |
+| `/console` | 开发者控制台：登记与管理应用（使用 RoamID 登录） |
+| `/apps`、`/apps.json` | 已启用的应用与被封禁的域名 |
+| `/report` | 举报应用或身份提供方 |
+| `/admin/reports` | 运营方队列（仅运营方） |
 | `/demo` | 演示应用（使用 PKCE 的公开客户端） |
 | `/demo/saml` | SAML 服务方演示 |
 | `POST /admin/sync` | 运营方立即同步登记表（Bearer 令牌） |

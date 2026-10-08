@@ -229,6 +229,7 @@ export function validateRegistry(doc, { strict = false } = {}) {
     const id = e && typeof e.client_id === "string" ? e.client_id : "(unknown)";
     const errs = validateClient(e);
     if (!errs.length && cids.has(e.client_id)) errs.push("client_id: duplicate");
+    if (!errs.length && (/^app-/.test(e.client_id) || e.client_id === "roamid-console")) errs.push("client_id: reserved (app-… identifiers belong to console applications)");
     if (!errs.length && e.protocol === "saml2" && spIds.has(e.entity_id)) errs.push("entity_id: already registered by another entry");
     if (!errs.length && strict && e.allowed_idps) {
       for (const a of e.allowed_idps) if (!ids.has(a)) errs.push(`allowed_idps: unknown identity provider ${a}`);

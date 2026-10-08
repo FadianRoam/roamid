@@ -2,6 +2,7 @@
 // -> Accept-Language -> English.
 
 import { getCookie } from "../lib/http.js";
+import { C, CE } from "./i18n-console.js";
 
 export const LANG_COOKIE = "__Host-rid_lang";
 export const THEME_COOKIE = "__Host-rid_theme";
@@ -241,6 +242,8 @@ export function t(lang, key, vars = {}) {
 export function errorText(lang, code) {
   return (E[lang] && E[lang][code]) || E.en[code] || E[lang].server_error;
 }
+
+for (const l of ["en", "zh"]) { Object.assign(T[l], C[l]); Object.assign(E[l], CE[l]); }
 
 export const ERROR_CODES = Object.keys(E.en);
 

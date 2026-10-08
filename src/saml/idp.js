@@ -13,6 +13,7 @@ import { PERSISTENT } from "./response.js";
 import { readSamlPost } from "./sp.js";
 import { now, html, text as textRes } from "../lib/http.js";
 import { getRegistry } from "../registry/store.js";
+import { resolveSamlSp } from "../apps/store.js";
 
 const UNSPECIFIED = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
 export const ST = {
@@ -23,14 +24,6 @@ export const ST = {
   denied: "urn:oasis:names:tc:SAML:2.0:status:RequestDenied",
   nameIdPolicy: "urn:oasis:names:tc:SAML:2.0:status:InvalidNameIDPolicy",
 };
-
-export function samlSp(reg, entityIdOrClientId, { byClientId = false } = {}) {
-  for (const c of reg.clients.values()) {
-    if (c.protocol !== "saml2" || c.status !== "active") continue;
-    if (byClientId ? c.client_id === entityIdOrClientId : c.entity_id === entityIdOrClientId) return c;
-  }
-  return null;
-}
 
 // HTTP-Redirect binding parameters, read once from the raw query string.
 // Each SAML parameter may appear at most once (compared by decoded name, so
@@ -99,7 +92,8 @@ export async function readAuthnRequest(request, env) {
   assertUniqueIds(doc);
   let fields = requestFields(doc.documentElement);
   const reg = await getRegistry(env);
-  const sp = samlSp(reg, fields.issuer);
+  const rs = await resolveSamlSp(env, reg, fields.issuer);
+  const sp = rs && rs.client;
   if (!sp) throw new SamlError("invalid_client", `service provider ${fields.issuer.slice(0, 100)} is not registered`);
   const denied = (msg) => Object.assign(new SamlError("saml_request", msg), { sp, acs: sp.acs_urls[0], requestId: fields.requestId && fields.requestId.length <= 200 ? fields.requestId : null, relayState, status: ST.requester, sub: ST.denied });
   if (sp.sign_cert) {
@@ -142,7 +136,7 @@ export async function readAuthnRequest(request, env) {
   if (fields.destination && fields.destination !== `${env.BASE_URL}/saml/idp/sso`) throw err("Destination is not this SSO URL");
   if (fields.nameIdPolicy && fields.nameIdPolicy !== PERSISTENT && fields.nameIdPolicy !== UNSPECIFIED) throw err("only persistent NameIDs are issued", ST.requester, ST.nameIdPolicy);
   const prompt = fields.isPassive === "true" ? "none" : fields.forceAuthn === "true" ? "login" : null;
-  return { sp, requestId, acs, relayState, prompt };
+  return { sp, gate: rs.gate, requestId, acs, relayState, prompt };
 }
 
 // The auto-submitting form that carries a SAML message to the service provider.

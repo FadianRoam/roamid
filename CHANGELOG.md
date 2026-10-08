@@ -6,6 +6,11 @@
 - SAML 2.0 encrypted assertions: AES-GCM; AES-CBC only inside a signed `Response`. Every decryption or parsing failure of an encrypted assertion gives the single error `saml_invalid_response`. Service provider metadata lists AES-GCM only.
 - SAML 2.0 in both directions: SAML identity providers upstream (`/saml/acs/<id>`) and RoamID as SAML identity provider for SAML-only applications (`/saml/idp/sso`), with metadata refresh, health, `/status` entries and documentation. Tested with SimpleSAMLphp 1.19 and Keycloak 26.0.
 - Registry entries may carry a `note`.
+- Developer console (`/console`, sign-in with RoamID itself): applications stored by the instance, automated review (names by confusable skeleton, reserved names, callback rules, public DNS, block lists, banned domains), domain proof by DNS TXT or a well-known file, development mode, limits, secret rotation with overlap, co-owners and ownership transfer, daily statistics.
+- Application pull requests that only touch `registry/clients/` are merged automatically when they pass the same review (`automerge` workflow).
+- `/apps` and `/apps.json`; the picker shows the application's proven domain.
+- Reports (`/report`, Orbit Verify), the operator queue (`/admin/reports`), dismiss / warn / suspend / ban / restore with an audit log, appeals, identity provider emergency override, help desk tickets for the operator.
+- New error codes: `app_suspended`, `app_banned`, `app_unverified`, `app_development`, `app_new_limit`.
 - XML signatures: exclusive canonicalization without comments only; transforms limited to enveloped-signature and exclusive canonicalization.
 
 ## 1.0.0 (2026-10-08)

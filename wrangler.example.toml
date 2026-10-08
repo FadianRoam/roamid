@@ -31,6 +31,9 @@ binding = "ASSETS"
 [vars]
 BASE_URL = "https://<public hostname>"
 REGISTRY_URL = "https://fadianroam.github.io/roamid/registry.json"
+# Report form (Orbit Verify site key, public) and the operator's help desk.
+VERIFY_SITEKEY = "<site key>"
+HELPDESK_URL = "<help desk base URL>"
 
 # Registry sync, domain proofs, health probes and clean-up every 5 minutes.
 [triggers]
@@ -55,3 +58,6 @@ enabled = true
 #   CDN_KEY             key of the edge's signed origin header (optional)
 #   IDP_SECRET_<ID>     client secret at an identity provider that uses client_secret_*
 #   SAML_KEYS           JSON array of {kid, cert, key} (PEM), SAML signing and encryption
+#   OPERATOR_SUBS       RoamID public subs allowed into /admin/reports
+#   VERIFY_SECRET       Orbit Verify site secret (report form)
+#   HELPDESK_API_KEY    help desk API key (operator tickets for reports)

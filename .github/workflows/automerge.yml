@@ -1,0 +1,51 @@
+name: automerge
+
+# Application pull requests (registry/clients only) that pass the automated
+# review are merged without a person (docs/registry.md). This job runs on
+# the base repository with the base branch checked out; it reads pull
+# requests through the API as data and never checks out or runs their code.
+on:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number (empty for all open)
+        required: false
+      dry_run:
+        description: Only report what would happen
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: automerge
+  cancel-in-progress: false
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Dependencies
+        run: npm ci --ignore-scripts
+      - name: Review and merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.inputs.pr || (github.event.workflow_run.pull_requests[0] && github.event.workflow_run.pull_requests[0].number) || '' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: node scripts/automerge.mjs

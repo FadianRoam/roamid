@@ -6,7 +6,10 @@ RoamID is a standard OpenID Connect Provider. Any certified OpenID Connect clien
 
 ## 1. Register
 
-Open a pull request that adds `registry/clients/<client_id>.json` (see [registry.md](registry.md)). The entry is live about 5 minutes after the merge. Example:
+Two ways, with the same automated review (section 12):
+
+- **Developer console** (recommended): sign in at `https://id.fadianro.am/console` with RoamID itself, create the application, prove the domain. The application is active as soon as every check passes. The console shows the `client_id` and, for `client_secret_*`, the secret once.
+- **Pull request**: add `registry/clients/<client_id>.json` (see [registry.md](registry.md)). A pull request that only adds or changes application entries and passes the automated review is merged automatically; the entry is live about 5 minutes later. `client_id` values starting with `app-` belong to the console and are refused here. Example:
 
 ```json
 {
@@ -34,6 +37,7 @@ Open a pull request that adds `registry/clients/<client_id>.json` (see [registry
 | `jwks_uri` | For `private_key_jwt`: https URL of your public keys (RS256, PS256 or ES256). |
 | `allowed_idps` | Optional list of identity provider ids. Without it, every active provider is offered. |
 | `subject_type` | `public` (default) or `pairwise`. |
+| `domain` | The application's domain (section 12). Required for an automatic merge. Shown in the picker. |
 
 ## 2. Endpoints
 
@@ -262,3 +266,48 @@ Attributes (URI name format; `FriendlyName` in brackets):
 | `urn:roamid:claims:sub` | `sub` (same value as the NameID) |
 
 The account linking rules of section 6 apply unchanged: link by NameID; use the email address to join an existing account only when `email_authority` is `authoritative`.
+
+## 12. Automated review, domain proof and limits
+
+Applications are not reviewed by a person. An application goes live when it passes these checks; the console and the pull-request job use the same code (`src/apps/checks.js`). The console shows each failed check with its code; the pull request gets a comment with the reasons.
+
+| Check | Rule | Code |
+|---|---|---|
+| Name | 2 to 60 characters; letters, digits, spaces and `- _ . & ' ( )` | `name_length`, `name_chars` |
+| Name | no domain name in it (`example.com`) | `name_domain` |
+| Name | no Latin mixed with Cyrillic or Greek letters | `name_mixed_script` |
+| Name | not too close to a reserved name ([policy/reserved-names.json](../policy/reserved-names.json)), compared by confusable skeleton (`0`→`o`, `rn`→`m`, Cyrillic `о`→`o`, …), as a part of the name for names of five or more characters, as a whole word for shorter ones | `name_reserved` |
+| Name | not the same skeleton as another identity provider or application | `name_taken` |
+| Domain | a host name such as `example.com`; not an IP address | `domain_invalid` |
+| Domain | not the domain (or a subdomain of the domain) of a banned application | `domain_banned` |
+| Domain and URLs | no host on the public block lists RoamID loads daily (URLhaus, OpenPhish) | `reputation` |
+| Callback, logout and ACS URLs | exact; https; no user name or password, fragment or wildcard; a host name, not an IP address; the domain or a subdomain of it; the host resolves in public DNS | `url_https`, `url_userinfo`, `url_fragment`, `url_wildcard`, `url_ip`, `url_off_domain`, `host_unresolved` |
+| Development | `http://localhost`, `http://127.0.0.1`, `http://[::1]` only in development mode | `url_localhost_active` |
+| Homepage | https, on the domain | `url_off_domain` |
+| Domain proof | see below | `domain_unproven` (pull request) |
+
+**Domain proof.** Publish one of:
+
+```
+_roamid-app.example.com.  TXT  "roamid-app=<client_id>"
+https://example.com/.well-known/roamid-app.txt   containing the line  <client_id>
+```
+
+The console checks at creation, on "Check now", every 15 minutes while the proof is missing, and once a day afterwards. When the proof disappears, sign-ins continue for 72 hours and are then refused with `app_unverified` until the proof is back. The picker shows the proven domain next to the application name; it is the anchor that tells people which site they sign in to.
+
+**Status of a console application.**
+
+| Status | Meaning |
+|---|---|
+| `development` | A callback is on localhost, or the domain is not proven yet. Only the owners and co-owners (at most 10) can sign in; others get `app_development`. |
+| `active` | Every check passed and the domain is proven. Anyone can sign in. |
+| `suspended` | Set by the operator, with a reason. Sign-in is refused before the picker (`app_suspended`), the application gets `access_denied`, and `/token` refuses it. The owner can appeal in the console. |
+| `banned` | Set by the operator for illegal sites. Like `suspended`; the person is not sent back to the application, and its domain cannot be used for a new application. |
+
+**Limits.** At most 10 applications per person; at most 200 new applications per day in total; during its first 7 days a new application has at most 500 sign-ins per day (`app_new_limit`, returned as `temporarily_unavailable`); the operator can lift the limit earlier.
+
+**Secrets.** The console stores only the SHA-256 of a client secret and shows the secret once. "New client secret" keeps the previous secret valid until "Revoke the previous secret", so servers can switch without downtime.
+
+**Owners.** The creator is the owner, identified by the RoamID public `sub` of the sign-in. An owner invites co-owners by the email address of their RoamID sign-in: the console makes a link, valid once for 7 days, that only a sign-in with that address can accept. The owner can transfer ownership to a co-owner.
+
+Reports and appeals: [policy.md](policy.md).

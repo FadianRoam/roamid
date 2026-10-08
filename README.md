@@ -35,6 +35,7 @@ Example: a hosting provider adds "Sign in with RoamID" to its customer portal.
 | [docs/rp-integration.md](docs/rp-integration.md) | Applications: endpoints, client authentication, claims, errors, examples, account linking |
 | [docs/idp-requirements.md](docs/idp-requirements.md) | Identity providers: compatibility requirements, redirect URI, client authentication, email domains |
 | [docs/registry.md](docs/registry.md) | Adding or changing a registry entry by pull request |
+| [docs/policy.md](docs/policy.md) | Acceptable use, reports, operator actions, appeals |
 | [docs/errors.md](docs/errors.md) | Error codes |
 | [docs/operations.md](docs/operations.md) | Running an instance: deployment, secrets, key rotation |
 | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md) | |
@@ -57,6 +58,10 @@ The interface described in these documents is version 1.
 | `/status`, `/status.json` | Registry commit, domain proofs, provider health, keys, daily counts |
 | `/saml/idp/metadata.xml`, `/saml/idp/sso` | SAML 2.0 identity provider for SAML service providers |
 | `/saml/sp/metadata.xml`, `/saml/acs/<idp-id>` | SAML 2.0 service provider of SAML identity providers |
+| `/console` | Developer console: register and manage applications (sign in with RoamID) |
+| `/apps`, `/apps.json` | Active applications and banned domains |
+| `/report` | Report an application or identity provider |
+| `/admin/reports` | Operator queue (operators only) |
 | `/demo` | Demo application (public client with PKCE) |
 | `/demo/saml` | Demo SAML service provider |
 | `POST /admin/sync` | Immediate registry sync for the operator (bearer token) |

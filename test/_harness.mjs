@@ -112,13 +112,33 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
     if (u.href.startsWith(REGISTRY_URL)) return Response.json(h.registry);
     if (u.host === "cloudflare-dns.com" || u.host === "dns.google") {
       const name = u.searchParams.get("name");
+      const type = u.searchParams.get("type");
+      if (type === "A" || type === "AAAA") {
+        const ok = !h.unresolved.has(name);
+        return Response.json({ Status: ok ? 0 : 3, Answer: ok && type === "A" ? [{ name, type: 1, data: "192.0.2.10" }] : [] });
+      }
       const vals = h.txt[name] || [];
       return Response.json({ Status: vals.length ? 0 : 3, Answer: vals.map((v) => ({ name, type: 16, data: `"${v}"` })) });
     }
     if (u.host === "rp.example.test" && u.pathname === "/jwks") return Response.json({ keys: [publicJwk(rpKey)] });
+    if (u.host === "verify.yunzheng.space" && u.pathname === "/v1/siteverify") {
+      const b = await req.json();
+      h.verifyCalls.push(b);
+      return Response.json(b.response === "good-token" ? { success: true, action: "report", hostname: "id.example.test" } : { success: false, "error-codes": ["invalid-input-response"] });
+    }
+    if (u.host === "helpdesk.example.test" && u.pathname === "/api/external/tickets") {
+      h.tickets.push({ key: req.headers.get("X-API-Key"), body: await req.json() });
+      return Response.json({ ok: true, number: `T-${h.tickets.length}` }, { status: 201 });
+    }
+    if (u.pathname === "/.well-known/roamid-app.txt") {
+      const body = h.wellKnown[u.host];
+      return body ? new Response(body) : new Response("not found", { status: 404 });
+    }
+    if (u.host === "urlhaus.abuse.ch" || u.host === "raw.githubusercontent.com") return new Response(h.blocklist[u.host] || "");
     for (const idp of Object.values(h.idps)) if (u.host === idp.host) return idp.handle(req);
     return new Response("no route", { status: 599 });
   };
+  h.unresolved = new Set(); h.verifyCalls = []; h.tickets = []; h.wellKnown = {}; h.blocklist = {};
   h.cookies = new Map();
   h.request = async (path, { method = "GET", body, headers = {}, cookies = true } = {}) => {
     const hdrs = new Headers(headers);
