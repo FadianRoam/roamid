@@ -18,6 +18,6 @@
   ],
   "sub_source": "nameid",
   "email_attribute_verified": false,
-  "note": "Disabled. Operator test entry used on 2026-10-08 to test SAML interoperability with a Keycloak 26.0 container as SAML identity provider on the tester's own machine.",
+  "note": "Disabled. Operator test entry used on 2026-10-08 to test SAML interoperability with a Keycloak 26.0 container as SAML identity provider on the tester's own machine. QA",
   "status": "disabled"
 }
