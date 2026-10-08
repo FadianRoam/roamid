@@ -14,6 +14,7 @@ import { pickLang, pickTheme, LANG_COOKIE, THEME_COOKIE, localName } from "./ui/
 import { homePage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
 import { demoPage } from "./ui/demo.js";
 import { VERSION } from "./version.js";
+import { serveAssetWithRange } from "./lib/range.js";
 
 const PUBLIC_CACHE = "public, max-age=300";
 
@@ -84,6 +85,7 @@ export async function handle(request, env, ctx) {
   const url = new URL(request.url);
   const p = url.pathname;
   const m = request.method;
+  if (p.startsWith("/assets/") && p.endsWith(".mp4") && env.ASSETS && (m === "GET" || m === "HEAD")) return serveAssetWithRange(request, env);
   if (p === "/.well-known/openid-configuration") return m === "OPTIONS" ? corsPreflight() : json(discoveryDoc(env), { cache: PUBLIC_CACHE, cors: true });
   if (p === "/jwks.json") return json((await signingKeys(env)).jwks, { cache: PUBLIC_CACHE, cors: true });
   if (p === "/client-jwks.json") return json((await clientKeys(env)).jwks, { cache: PUBLIC_CACHE, cors: true });
