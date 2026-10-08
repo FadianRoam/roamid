@@ -255,7 +255,8 @@ test("discovery document and public pages", async () => {
   assert.equal(d.issuer, BASE);
   assert.deepEqual(d.code_challenge_methods_supported, ["S256"]);
   assert.equal(d.request_uri_parameter_supported, false);
-  for (const p of ["/", "/idps", "/status", "/demo"]) {
+  // Chinese pages live at /zh/... (src/ui/seo.js); Accept-Language does not change a public URL.
+  for (const p of ["/zh/", "/zh/idps", "/zh/status", "/zh/demo"]) {
     const res = await h.request(p, { headers: { "Accept-Language": "zh-CN,zh;q=0.9" } });
     assert.equal(res.status, 200, p);
     assert.match(res.headers.get("Cache-Control"), /^no-store/, p);

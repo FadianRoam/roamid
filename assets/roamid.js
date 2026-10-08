@@ -53,15 +53,19 @@
     setTimeout(go, 1200);
   }
 
-  // ---- band video: plays unless reduced motion
+  // ---- band video: loaded after the page (the poster image is the first
+  // paint), shown once it plays; never with reduced motion
   var v = $(".band video");
   if (v) {
     var sync = function () {
       if (reduce.matches) { v.pause(); return; }
+      if (!v.getAttribute("src")) { v.src = v.getAttribute("data-src"); v.preload = "auto"; }
       v.muted = true;
       var p = v.play(); if (p && p.catch) p.catch(function () {});
     };
-    sync();
+    v.addEventListener("playing", function () { v.classList.add("on"); });
+    var start = function () { setTimeout(sync, 0); };
+    if (document.readyState === "complete") start(); else window.addEventListener("load", start, { once: true });
     if (reduce.addEventListener) reduce.addEventListener("change", sync);
   }
 

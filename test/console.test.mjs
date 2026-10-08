@@ -121,7 +121,7 @@ test("console: sign in with RoamID, create an app, prove the domain, active; sec
   const landing = await (await h.request("/console")).text();
   assert.match(landing, /console-signin/);
   assert.match(landing, /href="https:\/\/github\.com\/FadianRoam\/roamid\/blob\/main\/docs\/registry\.md[^"]*" id="pr-channel">No account at a listed identity provider\? Register by GitHub pull request</);
-  assert.match(await (await h.request("/", { headers: { "Accept-Language": "zh-CN" } })).text(), /没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记/);
+  assert.match(await (await h.request("/zh/")).text(), /没有列表中任何身份提供方的账户？可以通过 GitHub 拉取请求登记/);
   await consoleLogin(h, USERS.alice);
   assert.match(await (await h.request("/console")).text(), /Alice/);
   // A post without the CSRF token is refused.

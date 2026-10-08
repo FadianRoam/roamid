@@ -5,11 +5,15 @@
 //   node scripts/build-assets.mjs --check   fail when the manifest is stale
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { join, dirname, basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SERVED = ["fonts/figtree-latin.woff2", "fonts/figtree-latin-ext.woff2", "band.mp4", "poster.webp", "mark.svg", "boot.js", "roamid.js", "roamid.css"];
+const SERVED = ["fonts/figtree-latin.woff2", "fonts/figtree-latin-ext.woff2", "band.mp4", "poster.webp", "poster-800.webp", "poster-1600.webp", "mark.svg", "boot.js", "roamid.js", "roamid.css", "docs.css", "og-en.png", "og-zh.png", "lab-logo.webp", "lab-logo.png"];
+// Served unhashed at a fixed path: the sitemap's browser view (a copy of
+// yunzheng.space/sitemap.xsl; browsers apply only same-origin XSL).
+const FIXED = { "sitemap.xsl": { path: "/sitemap.xsl", type: "text/xsl; charset=utf-8" } };
 const check = process.argv.includes("--check");
 
 const hashed = (name, buf) => {
@@ -39,6 +43,10 @@ mkdirSync(join(root, "public/assets"), { recursive: true });
 // adds byte ranges (src/lib/range.js); the assets binding has no Range support.
 mkdirSync(join(root, "public/media"), { recursive: true });
 for (const [p, buf] of outputs) writeFileSync(join(root, "public", p.endsWith(".mp4") ? p.replace("/video/", "/media/") : p), buf);
-writeFileSync(join(root, "public/_headers"), ["/assets/*", "/media/*"].map((p) => `${p}\n  Cache-Control: public, max-age=31536000, immutable\n  X-Content-Type-Options: nosniff\n  Access-Control-Allow-Origin: *\n`).join(""));
+for (const [name, f] of Object.entries(FIXED)) writeFileSync(join(root, "public", f.path), readFileSync(join(root, "assets", name)));
+writeFileSync(join(root, "public/_headers"), ["/assets/*", "/media/*"].map((p) => `${p}\n  Cache-Control: public, max-age=31536000, immutable\n  X-Content-Type-Options: nosniff\n  Access-Control-Allow-Origin: *\n`).join("")
+  + Object.values(FIXED).map((f) => `${f.path}\n  Content-Type: ${f.type}\n  Cache-Control: public, max-age=3600\n  X-Content-Type-Options: nosniff\n`).join(""));
 writeFileSync(mpath, manifest);
 console.log(Object.entries(map).map(([k, v]) => `${k} -> ${v}`).join("\n"));
+// The documents pages (src/ui/docs-content.js), fresh at every deploy.
+execFileSync(process.execPath, [join(root, "scripts/build-docs.mjs")], { stdio: "inherit" });

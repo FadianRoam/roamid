@@ -1,0 +1,27 @@
+/* /docs: rendered Markdown documents (src/ui/docs.js) */
+.crumbs{font-size:14px;letter-spacing:var(--tr-ui);margin-bottom:10px}
+.crumbs a{color:var(--dim);text-decoration:none}.crumbs a:hover{color:var(--ink)}
+.prose{max-width:46em;line-height:1.62}
+html[lang^=zh] .prose{line-height:1.8}
+.prose>*+*{margin-top:14px}
+.prose h2{margin-top:36px;font-weight:var(--w-semi);font-size:23px;line-height:1.25;letter-spacing:var(--tr-ui)}
+.prose h3{margin-top:28px;font-weight:var(--w-semi);font-size:18.5px;line-height:1.3;letter-spacing:var(--tr-ui)}
+.prose h4,.prose h5,.prose h6{margin-top:22px;font-weight:var(--w-semi);font-size:16px}
+.prose h2,.prose h3,.prose h4{scroll-margin-top:16px}
+.prose a{color:inherit;text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}
+.prose ul,.prose ol{padding-left:22px}.prose li+li{margin-top:6px}.prose li>ul,.prose li>ol,.prose li>pre,.prose li>p{margin-top:6px}
+.prose code{background:var(--card);border-radius:5px;padding:1px 5px;font-size:.88em}
+.prose pre{background:var(--card);border-radius:12px;padding:14px 16px;overflow-x:auto;line-height:1.5}
+.prose pre code{background:none;padding:0;font-size:13px;overflow-wrap:normal;white-space:pre}
+.prose blockquote{border-left:3px solid var(--accent);padding:2px 0 2px 14px;color:var(--ink-soft)}
+.prose hr{border:0;border-top:1px solid var(--row)}
+.prose .scroll{overflow-x:auto}
+.prose .tbl{font-size:14.5px}
+.prose .tbl td,.prose .tbl th{overflow-wrap:anywhere}
+.doc-meta{margin-top:36px;font-size:14px;color:var(--dim);letter-spacing:var(--tr-ui)}
+.doc-meta a{color:var(--dim)}
+.doclist{list-style:none;padding:0;margin-top:26px;display:grid;gap:12px}
+.doclist li{background:var(--card);border-radius:14px;padding:16px 18px}
+.doclist a{color:var(--ink);text-decoration:none;font-size:17px}.doclist a:hover b{text-decoration:underline;text-decoration-color:var(--accent)}
+.doclist span:not(.badge){display:block;margin-top:6px;color:var(--ink-soft);font-size:14.5px;line-height:1.5}
+.prose .tbl td:first-child code{white-space:nowrap;overflow-wrap:normal}

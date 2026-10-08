@@ -4,10 +4,17 @@ export const ASSETS = {
   "fonts/figtree-latin-ext.woff2": "/assets/figtree-latin-ext.f153aa07c1.woff2",
   "band.mp4": "/video/band.282e918b13.mp4",
   "poster.webp": "/assets/poster.f972ce8a50.webp",
+  "poster-800.webp": "/assets/poster-800.6821777de2.webp",
+  "poster-1600.webp": "/assets/poster-1600.dcf02bedda.webp",
   "mark.svg": "/assets/mark.a16ec2317e.svg",
   "boot.js": "/assets/boot.2d7f7354b4.js",
-  "roamid.js": "/assets/roamid.3b9a1bd2bc.js",
-  "roamid.css": "/assets/roamid.4752993f7c.css"
+  "roamid.js": "/assets/roamid.a41125aba1.js",
+  "roamid.css": "/assets/roamid.14bad12f95.css",
+  "docs.css": "/assets/docs.e1a2d3bed0.css",
+  "og-en.png": "/assets/og-en.2beb83aeac.png",
+  "og-zh.png": "/assets/og-zh.96c4362745.png",
+  "lab-logo.webp": "/assets/lab-logo.ba14295660.webp",
+  "lab-logo.png": "/assets/lab-logo.d386408f65.png"
 };
 // Byte sizes of the files served with ranges (the assets binding streams without Content-Length).
 export const SIZES = {

@@ -7,12 +7,13 @@
 
 import { t, errorText, localName } from "./i18n.js";
 import { ASSETS } from "./manifest.js";
+import { pageOf, head as seoHead, href, langPath, POWERED, LAB_URL } from "./seo.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const REPO = "https://github.com/FadianRoam/roamid";
-const DOCS = { en: `${REPO}#documentation`, zh: `${REPO}/blob/main/README.zh-CN.md#文档` };
 export const REGISTRY_DOCS = { en: `${REPO}/blob/main/docs/registry.md#without-an-account-at-a-listed-identity-provider`, zh: `${REPO}/blob/main/docs/zh-CN/registry.md` };
-const RP_DOCS = { en: `${REPO}/blob/main/docs/rp-integration.md`, zh: `${REPO}/blob/main/docs/zh-CN/rp-integration.md` };
+// The integration guide, rendered on this site from docs/ (src/ui/docs.js).
+const RP_DOCS = { en: "/docs/rp-integration", zh: "/zh/docs/rp-integration" };
 
 const ICON = {
   system: '<path d="M3 4.5h14v9H3z"/><path d="M7 16.5h6M10 13.5v3"/>',
@@ -30,40 +31,52 @@ const MARK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx
 const prefLink = (kind, value, path) => `/prefs?${kind}=${value}&next=${encodeURIComponent(path)}`;
 const NEXT_THEME = { system: "light", light: "dark", dark: "system" };
 
+// The language switch and every link in the navigation and the footer go
+// to language URLs (src/ui/seo.js): /x in English, /zh/x in Chinese. Pages
+// without one (picker, console) switch language with the /prefs cookie.
 function nav({ lang, theme, path, active }) {
   const other = lang === "zh" ? "en" : "zh";
   const otherLabel = other === "zh" ? "中文" : "English";
+  const pg = pageOf(path, lang);
+  const twin = pg ? (pg.langs.includes(other) ? langPath(other, pg.path) + (pg.self.includes("?") ? pg.self.slice(pg.self.indexOf("?")) : "") : langPath(other, "/docs")) : prefLink("lang", other, path);
+  const here = pg ? pg.self : path;
   const links = [
-    ["/idps", t(lang, "nav_idps_short"), "idps"], ["/apps", t(lang, "nav_apps"), "apps"], [DOCS[lang], t(lang, "nav_docs"), "docs"],
-    ["/status", t(lang, "nav_status"), "status"], [REPO, t(lang, "nav_source"), "github"],
+    [href(lang, "/idps"), t(lang, "nav_idps_short"), "idps"], [href(lang, "/apps"), t(lang, "nav_apps"), "apps"], [href(lang, "/docs"), t(lang, "nav_docs"), "docs"],
+    [href(lang, "/status"), t(lang, "nav_status"), "status"], [REPO, t(lang, "nav_source"), "github"],
   ];
   const a = ([h, l, k]) => `<a href="${esc(h)}"${active === k ? ' aria-current="page"' : ""}>${esc(l)}</a>`;
   const next = NEXT_THEME[theme];
   const themeLabel = t(lang, "theme_next", { cur: t(lang, "theme_" + theme), next: t(lang, "theme_" + next) });
   return `<nav class="nav" aria-label="RoamID">
-<a class="brand" href="/">${MARK}<span>RoamID</span></a>
+<a class="brand" href="${href(lang, "/")}">${MARK}<span>RoamID</span></a>
 <div class="links">${links.map(a).join("")}</div>
 <div class="tools">
-<a class="tool lang-switch" href="${esc(prefLink("lang", other, path))}" hreflang="${other === "zh" ? "zh-CN" : "en"}" aria-label="${esc(t(lang, "language"))}: ${otherLabel}">${icon("globe")}<span>${otherLabel}</span></a>
-<a class="tool theme-switch" data-theme-current="${theme}" href="${esc(prefLink("theme", next, path))}" aria-label="${esc(themeLabel)}" title="${esc(themeLabel)}">${icon(theme)}</a>
+<a class="tool lang-switch" href="${esc(twin)}" hreflang="${other === "zh" ? "zh-CN" : "en"}" aria-label="${esc(t(lang, "language"))}: ${otherLabel}">${icon("globe")}<span>${otherLabel}</span></a>
+<a class="tool theme-switch" data-theme-current="${theme}" href="${esc(prefLink("theme", next, here))}" aria-label="${esc(themeLabel)}" title="${esc(themeLabel)}">${icon(theme)}</a>
 </div>
-<a class="nav-cta wide" href="/demo">${esc(t(lang, "nav_demo"))}</a>
+<a class="nav-cta wide" href="${href(lang, "/demo")}">${esc(t(lang, "nav_demo"))}</a>
 <details class="menu"><summary aria-label="${esc(t(lang, "menu"))}" aria-controls="menu-panel">${icon("burger")}</summary>
-<div class="menu-panel" id="menu-panel">${links.map(a).join("")}<a href="/demo">${esc(t(lang, "nav_demo"))}</a><hr>
-<a class="lang-switch" href="${esc(prefLink("lang", other, path))}">${icon("globe")}${otherLabel}</a>
-${["system", "light", "dark"].map((v) => `<a href="${esc(prefLink("theme", v, path))}"${theme === v ? ' aria-current="true"' : ""}>${icon(v)}${esc(t(lang, "theme_" + v))}</a>`).join("")}
+<div class="menu-panel" id="menu-panel">${links.map(a).join("")}<a href="${href(lang, "/demo")}">${esc(t(lang, "nav_demo"))}</a><hr>
+<a class="lang-switch" href="${esc(twin)}" hreflang="${other === "zh" ? "zh-CN" : "en"}">${icon("globe")}${otherLabel}</a>
+${["system", "light", "dark"].map((v) => `<a href="${esc(prefLink("theme", v, here))}"${theme === v ? ' aria-current="true"' : ""}>${icon(v)}${esc(t(lang, "theme_" + v))}</a>`).join("")}
 </div></details>
 </nav>`;
 }
 
-function doc({ lang, theme, title, body, anim = false, head = "" }) {
+// `path` is the path the page was rendered for; public pages (seo.js
+// pageOf) get description, canonical, hreflang, Open Graph and JSON-LD,
+// every other page "noindex". `seo` is extra data for the JSON-LD.
+function doc({ lang, theme, title, body, anim = false, head = "", path = "", seo }) {
+  const pg = pageOf(path, lang);
+  const s = pg ? seoHead(pg, seo) : null;
   return `<!doctype html>
 <html lang="${lang === "zh" ? "zh-CN" : "en"}"${theme !== "system" ? ` data-theme="${theme}"` : ""}${anim ? " data-anim" : ""}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="${theme === "system" ? "light dark" : theme}">
-<title>${esc(title)}</title>
+<title>${esc(s ? s.title : title)}</title>
+${s ? s.tags : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="${ASSETS["mark.svg"]}" type="image/svg+xml">
 <link rel="preload" href="${ASSETS["fonts/figtree-latin.woff2"]}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${ASSETS["roamid.css"]}">
@@ -76,11 +89,23 @@ ${body}
 </html>`;
 }
 
-const band = () => `<div class="band" aria-hidden="true"><video muted loop playsinline preload="metadata" poster="${ASSETS["poster.webp"]}"><source src="${ASSETS["band.mp4"]}" type="video/mp4"></video></div>`;
+// The band: the poster is a real image (the largest paint on landing and
+// picker, fetched at high priority with its size known); assets/roamid.js
+// starts the video after the page has loaded, unless motion is reduced.
+const band = () => `<div class="band" aria-hidden="true"><img class="poster" src="${ASSETS["poster-1600.webp"]}" srcset="${ASSETS["poster-800.webp"]} 800w, ${ASSETS["poster-1600.webp"]} 1600w, ${ASSETS["poster.webp"]} 3168w" sizes="100vw" width="1600" height="679" alt="" fetchpriority="high" decoding="async"><video muted loop playsinline preload="none" data-src="${ASSETS["band.mp4"]}"></video></div>`;
 
-export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "" }) {
-  const foot = `<footer class="foot"><a href="/">RoamID</a><a href="/idps">${esc(t(lang, "nav_idps"))}</a><a href="/status">${esc(t(lang, "nav_status"))}</a><a href="/apps">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="/report">${esc(t(lang, "rep_title"))}</a><a href="/demo">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></footer>`;
-  return doc({ lang, theme, head, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${foot}</div>` });
+// The footer of every page: links (not on the picker), then "Powered by"
+// with the YunZheng LAB logo, served from this origin.
+export function footer(lang, { links = true } = {}) {
+  const a = (p, label) => `<a href="${esc(href(lang, p))}">${esc(label)}</a>`;
+  const row = links ? `<div class="foot-links">${a("/", "RoamID")}${a("/idps", t(lang, "nav_idps"))}${a("/status", t(lang, "nav_status"))}${a("/apps", t(lang, "nav_apps"))}${a("/console", t(lang, "c_title"))}${a("/report", t(lang, "rep_title"))}${a("/demo", t(lang, "nav_demo"))}${a("/docs", t(lang, "nav_docs"))}<a href="${REPO}">GitHub</a></div>` : "";
+  const [pre, post] = POWERED[lang] || POWERED.en;
+  const logo = `<picture><source srcset="${ASSETS["lab-logo.webp"]}" type="image/webp"><img src="${ASSETS["lab-logo.png"]}" width="54" height="24" alt="YunZheng LAB" loading="lazy" decoding="async"></picture>`;
+  return `<footer class="foot">${row}<a class="powered" href="${LAB_URL}">${pre ? `<span>${esc(pre)}</span>` : ""}${logo}${post ? `<span>${esc(post)}</span>` : ""}</a></footer>`;
+}
+
+export function contentPage({ lang, theme, path, active, title, body, narrow = false, head = "", seo }) {
+  return doc({ lang, theme, head, path, seo, title: `${title} · RoamID`, body: `<div class="page"><div class="topbar">${nav({ lang, theme, path, active })}</div><main class="content${narrow ? " narrow" : ""}">${body}</main>${footer(lang)}</div>` });
 }
 
 const hostOf = (u) => { try { return new URL(u).host; } catch { return ""; } };
@@ -89,10 +114,10 @@ const dotClass = (h) => (["up", "degraded", "down"].includes(h) ? h : "unknown")
 
 // ---- landing ----------------------------------------------------------------
 
-export function homePage({ lang, theme, idps = [], health = {} }) {
+export function homePage({ lang, theme, path = "/", idps = [], health = {} }) {
   const rows = idps.slice(0, 2).map((i) => `<li class="row" aria-hidden="true"><span class="dot ${dotClass(health[i.id])}"></span><span class="t"><span class="n">${esc(localName(i, lang))}</span><span class="h">${esc(idpHost(i))}</span></span><span class="tick"></span></li>`).join("");
   const body = `<div class="hero" data-page="landing"><div class="stage">
-${nav({ lang, theme, path: "/", active: "" })}
+${nav({ lang, theme, path, active: "" })}
 <h1 class="display"><span>${esc(t(lang, "hero_l1"))}</span><span>${esc(t(lang, "hero_l2"))}</span></h1>
 <p class="sub">${esc(t(lang, "hero_sub"))}</p>
 <a class="pill hero-cta" href="${esc(RP_DOCS[lang])}">${esc(t(lang, "hero_cta"))}</a>
@@ -103,8 +128,9 @@ ${nav({ lang, theme, path: "/", active: "" })}
 <div class="search">${icon("search")}<span class="ph">${esc(t(lang, "pick_search"))}</span></div>
 <ul class="rows">${rows}<li class="row join"><span class="dot unknown"></span><span class="t"><span class="n">${esc(t(lang, "sample_join"))}</span><span class="h">${esc(t(lang, "sample_join_h"))}</span></span></li></ul>
 <div class="actions"><span class="cancel">${esc(t(lang, "pick_cancel_short"))}</span><span class="pill demo">${esc(t(lang, "pick_continue"))}</span></div>
-</div></div></div></div>`;
-  return doc({ lang, theme, title: "RoamID", body, anim: true });
+</div></div></div></div>
+${footer(lang)}`;
+  return doc({ lang, theme, path, title: "RoamID", body, anim: true });
 }
 
 // ---- the identity provider picker ---------------------------------------------
@@ -135,8 +161,9 @@ ${nav({ lang, theme, path, active: "" })}
 <h1 class="display"><span>${esc(t(lang, "pick_h1"))}</span><span>${esc(t(lang, "pick_h2"))}</span></h1>
 <p class="sub">${esc(t(lang, "pick_sub"))}</p>
 <div class="scene">${band()}${card}</div>
-</div></div>`;
-  return doc({ lang, theme, title: `${t(lang, "pick_title", { rp })} · RoamID`, body, anim: true });
+</div></div>
+${footer(lang, { links: false })}`;
+  return doc({ lang, theme, path, title: `${t(lang, "pick_title", { rp })} · RoamID`, body, anim: true });
 }
 
 // ---- content pages -------------------------------------------------------------
@@ -169,13 +196,13 @@ export function healthBadge(lang, idp, h) {
   return `<span class="badge ${cls}"><span class="dot ${dotClass(h)}"></span>${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}</span>`;
 }
 
-export function idpsPage({ lang, theme, idps, health = {} }) {
+export function idpsPage({ lang, theme, path = "/idps", idps, health = {} }) {
   const L = (k) => ` data-label="${esc(t(lang, k))}"`;
   const rows = idps.map((i) => `<tr><td${L("col_name")}><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span>${i.note ? `<br><span class="note">${esc(i.note)}</span>` : ""}</td><td${L("col_issuer")}><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td${L("col_domains")}>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td${L("col_status")}>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
   const body = `<h1 class="title">${esc(t(lang, "idps_title"))}</h1><p class="lead">${esc(t(lang, "idps_lead"))}</p>
 <div class="section box"><div class="scroll"><table class="tbl stack"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
-  return contentPage({ lang, theme, path: "/idps", active: "idps", title: t(lang, "idps_title"), body });
+  return contentPage({ lang, theme, path, active: "idps", title: t(lang, "idps_title"), body, seo: { idps: idps.filter((i) => i.status !== "disabled").map((i) => ({ name: localName(i, lang), url: i.homepage })) } });
 }
 
 function age(lang, secs) {
@@ -184,7 +211,7 @@ function age(lang, secs) {
   return t(lang, "ago", { n: lang === "zh" ? n.replace(" s", " 秒").replace(" min", " 分钟").replace(" h", " 小时").replace(" d", " 天") : n });
 }
 
-export function statusPage({ lang, theme, s }) {
+export function statusPage({ lang, theme, path = "/status", s }) {
   const r = s.registry;
   const kv = (rows) => `<div class="kv">${rows.map(([k, v]) => `<div>${esc(k)}</div><div>${v}</div>`).join("")}</div>`;
   const proof = (p) => `<span class="badge ${p.state === "verified" ? "ok" : p.state === "grace" ? "warn" : p.state === "lost" ? "bad" : ""}">${esc(t(lang, "proof_" + p.state))}</span>`;
@@ -210,7 +237,7 @@ ${sec(t(lang, "status_counts"), kv([[t(lang, "status_started"), `${s.counts.star
 ${s.daily && s.daily.per_day.length ? sec(t(lang, "status_daily"), `<div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "c_day"))}</th><th>${esc(t(lang, "status_started"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_day.map((d) => `<tr><td class="mono">${esc(d.day)}</td><td>${d.started}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>${s.daily.per_idp.length ? `<div class="scroll gap"><table class="tbl"><thead><tr><th>${esc(t(lang, "nav_idps"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_idp.map((d) => `<tr><td class="mono">${esc(d.idp)}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>` : ""}`) : ""}
 ${sec(t(lang, "status_version"), kv([["RoamID", esc(s.version)], ["Deployment", `<code>${esc(s.deployment || "-")}</code>`]]))}
 <p class="lead"><a href="/status.json">/status.json</a></p>`;
-  return contentPage({ lang, theme, path: "/status", active: "status", title: t(lang, "status_title"), body });
+  return contentPage({ lang, theme, path, active: "status", title: t(lang, "status_title"), body });
 }
 
 export function demoPage({ lang, theme, path, clientId }) {

@@ -17,6 +17,8 @@ import { probeIdps } from "./health.js";
 import { pickLang, pickTheme, LANG_COOKIE, THEME_COOKIE, localName } from "./ui/i18n.js";
 import { homePage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
 import { demoPage } from "./ui/demo.js";
+import { configure, base, canonicalize, sitemapXml, robotsTxt, onOrigin, INDEXNOW_KEY } from "./ui/seo.js";
+import { docsIndexPage, docPage, docBySlug } from "./ui/docs.js";
 import { VERSION } from "./version.js";
 import { serveAssetWithRange } from "./lib/range.js";
 import { handleConsole, handleApps, handleReport, handleAdmin, handleAppealApi } from "./console/routes.js";
@@ -112,9 +114,25 @@ function prefs(request) {
 }
 
 export async function handle(request, env, ctx) {
-  const url = new URL(request.url);
-  const p = url.pathname;
+  configure(env);
+  let url = new URL(request.url);
+  let p = url.pathname;
   const m = request.method;
+  // Public pages: one URL per language (src/ui/seo.js). Other spellings
+  // answer 301 at the public name; the page is then routed under its English
+  // path with ?lang= set, which is what the renderers read.
+  if (m === "GET" || m === "HEAD") {
+    const c = canonicalize(url);
+    if (c && c.redirect) return redirect(base() + c.redirect, { status: 301, headers: { "Cache-Control": "public, max-age=3600" } });
+    if (c && c.notFound) { const v = view(request); return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404 }); }
+    if (c) {
+      url = new URL(url);
+      url.pathname = c.path;
+      url.searchParams.set("lang", c.lang);
+      request = new Request(url, request);
+      p = c.path;
+    }
+  }
   if (p.startsWith("/video/") && p.endsWith(".mp4") && env.ASSETS && (m === "GET" || m === "HEAD")) return serveAssetWithRange(request, env);
   if (p === "/.well-known/openid-configuration") return m === "OPTIONS" ? corsPreflight() : json(discoveryDoc(env), { cache: PUBLIC_CACHE, cors: true });
   if (p === "/jwks.json") return json((await signingKeys(env)).jwks, { cache: PUBLIC_CACHE, cors: true });
@@ -161,7 +179,14 @@ export async function handle(request, env, ctx) {
   if (p === "/demo" || p === "/demo/callback") return html(demoPage(v));
   if (p === "/demo/saml") return demoSamlPage(v);
   if (p === "/test" || p.startsWith("/test/")) { if (!(await allow(env, "authorize", await clientIp(request, env)))) return html(errorPage({ ...v, path: "/", code: "rate_limited", requestId: "-" }), { status: 429 }); const r = await handleTest(request, env, p, v); if (r) return r; }
-  if (p === "/robots.txt") return text("User-agent: *\nDisallow: /authorize\nDisallow: /select\nDisallow: /callback/\nDisallow: /demo/callback\nDisallow: /console\nDisallow: /admin\nDisallow: /report\n", { cache: PUBLIC_CACHE });
+  if (p === "/robots.txt") return text(robotsTxt({ origin: onOrigin(request) }), { cache: PUBLIC_CACHE });
+  if (p === "/sitemap.xml") {
+    const reg = await getRegistry(env);
+    return text(sitemapXml({ registryDate: reg.generated_at }), { cache: PUBLIC_CACHE, type: "application/xml; charset=utf-8" });
+  }
+  if (p === `/${INDEXNOW_KEY}.txt`) return text(INDEXNOW_KEY, { cache: PUBLIC_CACHE });
+  if (p === "/docs") return html(docsIndexPage(v));
+  if (p.startsWith("/docs/") && docBySlug(p.slice(6))) return html(docPage({ ...v, doc: docBySlug(p.slice(6)) }));
   if (p === "/favicon.ico") return new Response(null, { status: 204, headers: { "Cache-Control": PUBLIC_CACHE } });
   return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404, nonce: v.nonce });
 }
@@ -188,13 +213,21 @@ export async function scheduled(env) {
 
 export default {
   async fetch(request, env, ctx) {
+    configure(env);
+    let res;
     try {
-      return await handle(request, env, ctx);
+      res = await handle(request, env, ctx);
     } catch (e) {
       console.error("[roamid] unhandled", e && e.stack || e);
       const v = view(request);
-      return html(errorPage({ ...v, path: "/", code: "server_error", requestId: request.headers.get("CF-Ray") || "-" }), { status: 500, nonce: v.nonce });
+      res = html(errorPage({ ...v, path: "/", code: "server_error", requestId: request.headers.get("CF-Ray") || "-" }), { status: 500, nonce: v.nonce });
     }
+    // The origin name behind Orbit Shield is never indexed.
+    if (onOrigin(request)) {
+      res = new Response(res.body, res);
+      res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    }
+    return res;
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(scheduled(env));

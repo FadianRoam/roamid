@@ -71,9 +71,10 @@ html[lang^=zh] .sub{line-height:1.65}
 .hero-cta{margin-top:20px}
 .scene{position:relative;display:flex;flex-direction:column;align-items:center;width:100%;flex:1 1 auto;min-height:0;margin-top:26px;padding:34px 0 0}
 .band{position:absolute;top:0;bottom:0;left:-16px;right:-16px;background:var(--band);overflow:hidden}
-.band video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .band video{filter:brightness(.8)}}
-:root[data-theme=dark] .band video{filter:brightness(.8)}
+.band video,.band .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.band video{opacity:0;transition:opacity .6s}.band video.on{opacity:1}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .band video,:root:not([data-theme=light]) .band .poster{filter:brightness(.8)}}
+:root[data-theme=dark] .band video,:root[data-theme=dark] .band .poster{filter:brightness(.8)}
 .card{position:relative;z-index:2;width:min(100%,calc(600 * var(--dp)));background:var(--card);border-radius:calc(16 * var(--dp));box-shadow:var(--glow);padding:calc(20 * var(--dp));display:flex;flex-direction:column;min-height:0;max-height:100%}
 .hero[data-page=landing] .card{--dp:clamp(.72px,calc((100vw - 32px) / 600),1px)}
 
@@ -230,3 +231,10 @@ html.staged .hero-note{position:absolute;top:392px;left:0;right:0;margin:0 auto;
 html.enter .hero-note{opacity:0}
 html.entering .hero-note{transition:opacity .8s .6s}
 .pubd{margin-top:10px}.pubd summary{cursor:pointer;color:var(--dim);font-size:14px}.form.pub{margin-top:10px}
+/* footer: links, then "Powered by" with the YunZheng LAB logo (a light tile in dark mode) */
+footer.foot{flex-direction:column;align-items:center;gap:12px}
+footer.foot .foot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 18px}
+footer.foot .powered{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;line-height:1;color:var(--dim)}
+footer.foot .powered img{display:block;width:auto;height:24px;border-radius:5px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) footer.foot .powered img{background:#f4f1ec;padding:2px 6px;height:28px}}
+:root[data-theme=dark] footer.foot .powered img{background:#f4f1ec;padding:2px 6px;height:28px}
