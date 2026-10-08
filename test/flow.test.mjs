@@ -156,6 +156,14 @@ test("pairwise sub: per sector, stable, different from the public sub", async ()
   assert.notEqual(p1, pub);
 });
 
+test("the public /idps page lists active identity providers only", async () => {
+  const h = await setup({ idps: { good: "idp.example.test", off: "off.example.test" } });
+  h.registry.idps[1].status = "disabled";
+  const page = await (await h.request("/idps")).text();
+  assert.match(page, /IdP good/);
+  assert.doesNotMatch(page, /IdP off/);
+});
+
 test("a disabled IdP is not offered and cannot be chosen", async () => {
   const h = await setup({ idps: { good: "idp.example.test", off: "off.example.test" } });
   h.registry.idps[1].status = "disabled";
