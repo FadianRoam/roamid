@@ -32,6 +32,7 @@ Set with `npx wrangler secret put <NAME> -c wrangler.local.toml`. Keep an offlin
 | `OPERATOR_SUBS` | RoamID public `sub` values (comma or space separated) allowed into `/admin/reports` |
 | `VERIFY_SECRET` | Orbit Verify site secret for the report form (`VERIFY_SITEKEY` is a plain variable) |
 | `HELPDESK_API_KEY` | key for the operator's help desk (`HELPDESK_URL` is a plain variable); without it new reports are only in the queue |
+| `APPEAL_TOKEN` | shared with the repository secret of the same name; lets the `issue-register` workflow deliver appeals filed with the issue form (`POST /admin/appeal`) |
 
 ## Key rotation / 密钥轮换
 
@@ -69,7 +70,7 @@ RoamID 或身份提供方的 SAML 证书到期前 30 天，`/status` 显示警�
 |---|---|
 | `IDP_SECRET_<ID>` | Create the new secret at the identity provider while the old one stays valid there, `secret put`, then remove the old one at the provider. / 在身份提供方处新建密钥（旧密钥暂保留），`secret put`，再在提供方处删除旧密钥。 |
 | Console client secrets | Owners rotate in the console: "New client secret" keeps the previous one valid until "Revoke the previous secret". / 所有者在控制台轮换：「生成新的客户端密钥」后上一个继续有效，直到「吊销上一个密钥」。 |
-| `ADMIN_TOKEN`, `VERIFY_SECRET`, `HELPDESK_API_KEY`, `CDN_KEY` | `secret put` the new value; for `VERIFY_SECRET` and `HELPDESK_API_KEY` change the other side (Orbit Verify site, help desk) at the same time. / `secret put` 新值；`VERIFY_SECRET` 与 `HELPDESK_API_KEY` 要同时修改另一侧（Orbit Verify 站点、客服系统）。 |
+| `ADMIN_TOKEN`, `VERIFY_SECRET`, `HELPDESK_API_KEY`, `APPEAL_TOKEN`, `CDN_KEY` | `secret put` the new value; for `VERIFY_SECRET`, `HELPDESK_API_KEY` and `APPEAL_TOKEN` change the other side (Orbit Verify site, help desk, repository secret) at the same time. / `secret put` 新值；`VERIFY_SECRET`、`HELPDESK_API_KEY` 与 `APPEAL_TOKEN` 要同时修改另一侧（Orbit Verify 站点、客服系统、仓库密钥）。 |
 
 ## Cron / 定时任务
 
@@ -99,6 +100,15 @@ Addresses are stored only as truncated hashes, per window.
   cron（每 5 分钟）获取 `REGISTRY_URL`，逐条校验并存入 D1。获取或解析失败时继续使用上一份，错误显示在 `/status`。
 - Immediate sync / 立即同步： `curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://<host>/admin/sync`. This also re-checks every email domain proof and probes every identity provider.
   同时重新检查所有邮箱域名证明并探测所有身份提供方。
+
+## Where reports appear / 举报在哪里查看
+
+1. Help desk: each report and each appeal opens a ticket in the Trust Review group (topic "Trust Score review"). The ticket names the target and links to `https://<host>/admin/reports#<report-id>`.
+   客服系统：每条举报与申诉都在 Trust Review 组（主题「Trust Score review」）新建工单，工单写明对象并链接到 `https://<host>/admin/reports#<report-id>`。
+2. `/admin/reports`: the operator queue, for the accounts in `OPERATOR_SUBS`. Items are grouped by target and ordered by distinct reporters in 24 hours; `#<report-id>` scrolls to the report. Decisions and "Publish report" are taken on the target page.
+   `/admin/reports`：运营方队列，仅 `OPERATOR_SUBS` 中的账户可访问。条目按对象分组，按 24 小时内不同举报者数排序；`#<report-id>` 定位到该举报。处理与「公开举报」在对象页面进行。
+3. Public record: decisions at `/transparency.json` and in `transparency/` (workflow `transparency`, hourly); published reports as issues labelled `report-upheld`. Appeals filed with the issue form reach the queue through `POST /admin/appeal` (`APPEAL_TOKEN`, workflow `issue-register`).
+   公开记录：处理结果见 `/transparency.json` 与 `transparency/`（工作流 `transparency`，每小时）；公开的举报为带 `report-upheld` 标签的 issue。通过 issue 表单提交的申诉经 `POST /admin/appeal`（`APPEAL_TOKEN`，工作流 `issue-register`）进入队列。
 
 ## Runbook / 处置手册
 

@@ -1,0 +1,21 @@
+name: Appeal a decision / 申诉
+description: Appeal an operator decision on an application or identity provider. The appeal goes to the operator's queue. / 对运营方关于应用或身份提供方的处理提出申诉，申诉进入运营方队列。
+title: "Appeal / 申诉"
+labels: [appeal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public. Do not include secrets or personal data. Owners can also appeal from the developer console.
+        本议题是公开的，请不要写入密钥或个人信息。所有者也可以在开发者控制台申诉。
+  - type: dropdown
+    attributes: { label: "Target type / 对象类型", options: [application, identity provider] }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Target / 对象", description: "client_id or identity provider id" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: "Decision record / 处理记录", description: "Optional: the record id or link from transparency/" }
+  - type: textarea
+    attributes: { label: "Statement / 申诉说明" }
+    validations: { required: true }

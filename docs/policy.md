@@ -25,6 +25,8 @@ The form asks for a category (phishing or impersonation, fraud, malware, illegal
 
 RoamID stores the report, the identifier of the sign-in in progress when the report was made from the sign-in page (application and identity provider ids, no personal data), the optional email address, and a one-way hash of the reporter's network address. The hash is used only to count distinct reporters.
 
+The form says: "If the report is upheld, its content may be published without your contact details." The reporter can tick "Do not publish my description"; a later publication of that report then shows only the category and the decision.
+
 A report alone does not change anything. It is queued for the operator, and the number of distinct reporters in the last 24 hours raises its priority.
 
 ## Operator actions
@@ -44,6 +46,25 @@ Every action is recorded with the time, the operator and the reason. Owners see 
 
 Identity providers stay under human governance: a provider is retired by a registry pull request setting `"status": "disabled"`. In an emergency the operator can disable a provider at once (an override stored by the instance); it reads as disabled everywhere until the operator removes the override.
 
+## Transparency
+
+Every operator decision is public: warn, suspend, ban and restore for applications; emergency disable and its removal for identity providers.
+
+| Published | Never published |
+|---|---|
+| The application or identity provider id, its proven domain, the report category, the date (UTC), the decision and a one-line reason. | The reporter's identity, email address or network address hash; the sign-in in progress when the report was made; the operator's identifiers. |
+
+- The record is available at `/transparency.json` (read-only, paged by `?after=<n>`), and mirrored every hour into this repository under `transparency/YYYY/MM.md` and `transparency/YYYY/MM.json`.
+- A report's text is published only when the operator chooses "Publish report" for it after the decision. The operator edits a redacted copy first: email addresses and phone numbers are removed and links are made non-clickable (`hxxps://example[.]com`). Published reports also appear as issues labelled `report-upheld`, titled "Report: <category> — <target id>".
+- A dismissed report is not published unless the operator explicitly chooses to publish it.
+- When the reporter chose "Do not publish my description", only the category and the decision are published.
+- An entry that was published in error is marked as withdrawn with a reason; it is not deleted.
+
 ## Appeals
 
-The owner of a suspended or banned application can appeal from the application's page in the console. An appeal opens a new item in the operator's queue. The operator answers by restoring the application or by keeping the action; either way the decision is recorded in the history.
+The owner of a suspended or banned application, or the contact of an identity provider, can appeal:
+
+- from the application's page in the console, or
+- with the "Appeal a decision" issue form in this repository (`appeal.yml`); each decision record links to it.
+
+An appeal opens a new item in the operator's queue. The operator answers by restoring the application or by keeping the action; either way the decision is recorded in the history and in the public record.

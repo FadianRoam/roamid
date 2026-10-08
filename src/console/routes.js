@@ -2,7 +2,7 @@
 // the operator queue.
 
 import { json, html, redirect, now, readForm, CSP } from "../lib/http.js";
-import { randomToken, sha256b64url, sha256hex } from "../lib/b64.js";
+import { randomToken, sha256b64url, sha256hex, safeEqual } from "../lib/b64.js";
 import { allow } from "../lib/ratelimit.js";
 import { clientIp } from "../lib/edgesig.js";
 import { getRegistry, resetMemo } from "../registry/store.js";
@@ -11,6 +11,7 @@ import { appEntry, loadApp } from "../apps/store.js";
 import { reviewEntry, checkAppDomain, settleStatus } from "../apps/review.js";
 import { LIMITS } from "../apps/checks.js";
 import { notifyOperator } from "../apps/notify.js";
+import { recordDecision, redactReportText } from "../apps/transparency.js";
 import { pickLang, pickTheme, t, localName } from "../ui/i18n.js";
 import { newNonce } from "../lib/http.js";
 import { loginStart, loginCallback, getSession, logoutSession, readPost, isOperator } from "./session.js";
@@ -316,8 +317,8 @@ export async function handleApps(request, env, p) {
 
 export async function createReport(env, r) {
   const id = `r-${randomToken(9).replace(/[^A-Za-z0-9]/g, "").slice(0, 10)}`;
-  await env.DB.prepare(`INSERT INTO reports (id, kind, target_kind, target_id, category, description, contact_email, context, reporter_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, r.kind, r.target_kind, r.target_id, r.category, r.description, r.contact_email || null, r.context, r.reporter_hash, now()).run();
+  await env.DB.prepare(`INSERT INTO reports (id, kind, target_kind, target_id, category, description, contact_email, context, reporter_hash, created_at, no_publish) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, r.kind, r.target_kind, r.target_id, r.category, r.description, r.contact_email || null, r.context, r.reporter_hash, now(), r.no_publish ? 1 : 0).run();
   const ticket = await notifyOperator(env, {
     subject: `RoamID ${r.kind === "appeal" ? "appeal" : "report"}: ${r.target_kind} ${r.target_id} (${r.category})`,
     body: `${r.kind === "appeal" ? "Appeal" : "Report"} ${id}\nTarget: ${r.target_kind} ${r.target_id}\nCategory: ${r.category}\nContact: ${r.contact_email || "-"}\nContext: ${r.context || "-"}\n\n${r.description}\n\nReports: ${env.BASE_URL}/admin/reports#${id}\nTarget: ${env.BASE_URL}/admin/target/${r.target_kind}/${r.target_id}`,
@@ -392,14 +393,14 @@ export async function handleReport(request, env) {
     const tx = await env.DB.prepare("SELECT client_id, idp, proto FROM tx WHERE id = ?").bind(txId).first();
     if (tx) context = JSON.stringify({ sign_in: { client_id: tx.client_id, idp: tx.idp || null, protocol: tx.proto } });
   }
-  const id = await createReport(env, { kind: "report", target_kind: target.kind, target_id: target.id, category: fv.category, description: fv.description, contact_email: fv.contact_email || null, context, reporter_hash: await sha256b64url(`report|${ip || "-"}`) });
+  const id = await createReport(env, { kind: "report", target_kind: target.kind, target_id: target.id, category: fv.category, description: fv.description, contact_email: fv.contact_email || null, context, reporter_hash: await sha256b64url(`report|${ip || "-"}`), no_publish: f.get("no_publish") === "yes" });
   return html(V.reportPage(v, { sent: id }), { headers });
 }
 
 // ---- operator ---------------------------------------------------------------------------------
 
-const APP_ACTIONS = { dismiss: "dismiss", warn: "warn", suspend: "suspend", ban: "ban", restore: "restore", lift_limit: "lift_limit" };
-const IDP_ACTIONS = { dismiss: "dismiss", idp_disable: "idp_disable", idp_enable: "idp_enable" };
+const APP_ACTIONS = { dismiss: "dismiss", warn: "warn", suspend: "suspend", ban: "ban", restore: "restore", lift_limit: "lift_limit", publish: "publish" };
+const IDP_ACTIONS = { dismiss: "dismiss", idp_disable: "idp_disable", idp_enable: "idp_enable", publish: "publish" };
 
 export async function handleAdmin(request, env, p) {
   const s = await getSession(request, env);
@@ -457,17 +458,21 @@ export async function handleAdmin(request, env, p) {
       actions = [["dismiss", t(v.lang, "adm_act_dismiss")], ["idp_disable", t(v.lang, "adm_act_idp_disable"), { danger: true }], ["idp_enable", t(v.lang, "adm_act_idp_enable")]];
     }
     const esc2 = (x) => x; // values above are built from validated ids
-    return html(V.adminTarget(v, { s, kind, id, name: localName(target, v.lang), info: info.map(([k, x]) => [k, esc2(x)]), reports: reports || [], audit: au || [], actions }));
+    const { results: pubs } = await env.DB.prepare("SELECT report_id FROM publications WHERE target_kind = ? AND target_id = ?").bind(kind, id).all();
+    const published = new Set((pubs || []).map((r) => r.report_id));
+    const shown = (reports || []).map((r) => ({ ...r, published: published.has(r.id), prefill: r.no_publish ? "" : `Category: ${r.category}. Target: ${kind} ${id}.\n\n${redactReportText(r.description)}` }));
+    return html(V.adminTarget(v, { s, kind, id, name: localName(target, v.lang), info: info.map(([k, x]) => [k, esc2(x)]), reports: shown, audit: au || [], actions }));
   }
   if (request.method !== "POST" || !action) return null;
   const f = await readPost(request, env, s);
   if (!f) return badRequest(request);
   const reason = String(f.get("reason") || "").trim().slice(0, 500) || null;
   const valid = kind === "app" ? APP_ACTIONS[action] : IDP_ACTIONS[action];
-  if (!valid || (!reason && action !== "dismiss")) return back(`/admin/target/${kind}/${id}`, null);
+  if (!valid || (!reason && action !== "dismiss" && action !== "publish")) return back(`/admin/target/${kind}/${id}`, null);
   const t0 = now();
+  if (action === "publish") return publishReport(request, env, s, kind, id, f);
   if (action === "dismiss") {
-    await env.DB.prepare("UPDATE reports SET state = 'closed', closed_by = ?, closed_at = ? WHERE target_kind = ? AND target_id = ? AND state = 'open'").bind(s.sub, t0, kind, id).run();
+    await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = 'dismissed', closed_by = ?, closed_at = ? WHERE target_kind = ? AND target_id = ? AND state = 'open'").bind(s.sub, t0, kind, id).run();
   } else if (kind === "app") {
     if (!row) return back(`/admin/target/${kind}/${id}`, null);
     if (action === "suspend" || action === "ban") {
@@ -480,7 +485,9 @@ export async function handleAdmin(request, env, p) {
     } else if (action === "lift_limit") {
       await env.DB.prepare("UPDATE apps SET limit_lifted = 1, updated_at = ? WHERE client_id = ?").bind(t0, id).run();
     }
-    if (action !== "warn") await env.DB.prepare("UPDATE reports SET state = 'closed', closed_by = ?, closed_at = ? WHERE target_kind = 'app' AND target_id = ? AND state = 'open'").bind(s.sub, t0, id).run();
+    // The open reports that led to a warning, suspension or ban are upheld.
+    if (["warn", "suspend", "ban"].includes(action)) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = CASE WHEN kind = 'report' THEN 'upheld' ELSE outcome END, closed_by = ?, closed_at = ? WHERE target_kind = 'app' AND target_id = ? AND state = 'open'").bind(s.sub, t0, id).run();
+    if (action === "restore") await env.DB.prepare("UPDATE reports SET state = 'closed', closed_by = ?, closed_at = ? WHERE target_kind = 'app' AND target_id = ? AND state = 'open' AND kind = 'appeal'").bind(s.sub, t0, id).run();
   } else if (action === "idp_disable") {
     await env.DB.prepare("INSERT INTO idp_overrides (idp, disabled, reason, by_sub, at) VALUES (?, 1, ?, ?, ?) ON CONFLICT(idp) DO UPDATE SET disabled = 1, reason = excluded.reason, by_sub = excluded.by_sub, at = excluded.at").bind(id, reason, s.sub, t0).run();
     resetMemo();
@@ -489,5 +496,45 @@ export async function handleAdmin(request, env, p) {
     resetMemo();
   }
   await audit(env, s.sub, kind, id, action, reason);
+  // The public record (transparency.json): no reporter data, no operator id.
+  await recordDecision(env, { kind, id, domain: row ? row.domain : null, decision: action, reason });
   return back(`/admin/target/${kind}/${id}`, null);
+}
+
+// Publish one closed report after review. The text is redacted again here;
+// a reporter who opted out gets category and decision only; a dismissed
+// report needs an explicit choice.
+async function publishReport(request, env, s, kind, id, f) {
+  const rep = await env.DB.prepare("SELECT * FROM reports WHERE id = ? AND target_kind = ? AND target_id = ? AND kind = 'report' AND state = 'closed'").bind(String(f.get("report_id") || ""), kind, id).first();
+  if (!rep) return back(`/admin/target/${kind}/${id}`, null);
+  if (rep.outcome !== "upheld" && f.get("publish_dismissed") !== "yes") return back(`/admin/target/${kind}/${id}`, null);
+  const dec = await env.DB.prepare("SELECT id, decision FROM decisions WHERE target_kind = ? AND target_id = ? ORDER BY id DESC LIMIT 1").bind(kind, id).first();
+  const decisionText = dec ? dec.decision : (rep.outcome === "dismissed" ? "dismissed" : "none");
+  const body = rep.no_publish ? `Category: ${rep.category}. Decision: ${decisionText}. (The reporter asked not to publish the description.)` : redactReportText(String(f.get("text") || ""));
+  if (!body.trim()) return back(`/admin/target/${kind}/${id}`, null);
+  await env.DB.prepare("INSERT INTO publications (at, report_id, decision_id, target_kind, target_id, category, text) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(report_id) DO NOTHING")
+    .bind(now(), rep.id, dec ? dec.id : null, kind, id, rep.category, body).run();
+  await audit(env, s.sub, kind, id, "published", null, rep.id);
+  return back(`/admin/target/${kind}/${id}`, null);
+}
+
+// POST /admin/appeal: an appeal filed as a GitHub issue (appeal form), passed
+// on by the repository's issue workflow with the APPEAL_TOKEN bearer. It only
+// creates an appeal item in the operator queue.
+export async function handleAppealApi(request, env) {
+  const authz = request.headers.get("Authorization") || "";
+  const tok = /^Bearer /i.test(authz) ? authz.slice(7).trim() : "";
+  if (request.method !== "POST" || !env.APPEAL_TOKEN || !tok || !safeEqual(tok, env.APPEAL_TOKEN)) return json({ error: "unauthorized" }, { status: 401 });
+  let b; try { b = await request.json(); } catch { return json({ error: "invalid_request" }, { status: 400 }); }
+  const issue = Number(b && b.issue) | 0, login = String(b && b.login || "").slice(0, 39), text = String(b && b.text || "").trim().slice(0, 4000);
+  const kind = b && b.target_kind === "idp" ? "idp" : "app", tid = String(b && b.target_id || "").trim();
+  if (!issue || !login || text.length < 5 || !/^[a-z0-9-]{2,64}$/.test(tid)) return json({ error: "invalid_request" }, { status: 400 });
+  const target = await targetOf(env, kind, tid);
+  if (!target) return json({ error: "unknown_target" }, { status: 404 });
+  const ctx = JSON.stringify({ github_issue: issue });
+  const dup = await env.DB.prepare("SELECT id FROM reports WHERE kind = 'appeal' AND context = ?").bind(ctx).first();
+  if (dup) return json({ ok: true, id: dup.id, duplicate: true });
+  const id = await createReport(env, { kind: "appeal", target_kind: kind, target_id: tid, category: "appeal", description: text, contact_email: null, context: ctx, reporter_hash: await sha256b64url(`appeal|gh|${login}`) });
+  await audit(env, "github", kind, tid, "appeal", null, id);
+  return json({ ok: true, id });
 }

@@ -19,8 +19,9 @@ import { homePage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
 import { demoPage } from "./ui/demo.js";
 import { VERSION } from "./version.js";
 import { serveAssetWithRange } from "./lib/range.js";
-import { handleConsole, handleApps, handleReport, handleAdmin } from "./console/routes.js";
+import { handleConsole, handleApps, handleReport, handleAdmin, handleAppealApi } from "./console/routes.js";
 import { handleTest } from "./console/testpage.js";
+import { transparencyJson } from "./apps/transparency.js";
 import { recheckApps, refreshBlocklists } from "./apps/review.js";
 
 const PUBLIC_CACHE = "public, max-age=300";
@@ -125,6 +126,7 @@ export async function handle(request, env, ctx) {
   if (p === "/userinfo") return userinfo(request, env);
   if (p === "/logout" && (m === "GET" || m === "POST")) return logout(request, env);
   if (p === "/admin/sync") return adminSync(request, env);
+  if (p === "/admin/appeal") return handleAppealApi(request, env);
   if (p === "/saml/sp/metadata.xml" && m === "GET") return spMetadataHandler(request, env);
   if (p === "/saml/idp/metadata.xml" && m === "GET") return idpMetadataHandler(env);
   if (p === "/saml/idp/sso" && (m === "GET" || m === "POST")) return samlSso(request, env);
@@ -144,6 +146,7 @@ export async function handle(request, env, ctx) {
     return json({ commit: reg.commit, idps: [...reg.idps.values()].map((i) => publicIdp(i, health)) }, { cache: "public, max-age=60", cors: true });
   }
   if (p === "/status.json") return json(await statusData(env), { cors: true });
+  if (p === "/transparency.json") return transparencyJson(env, url);
   const v = view(request);
   if (p === "/") {
     const reg = await getRegistry(env);

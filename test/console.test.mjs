@@ -383,3 +383,85 @@ test("/test/<idp>: one sign-in, the normalized claims shown, pairwise subject, n
   assert.doesNotMatch(page, new RegExp(await publicSub(USERS.bob)), "pairwise, not the public sub");
   assert.equal((await h.request("/test/no-such-idp")).status, 404);
 });
+
+// ---- transparency ------------------------------------------------------------------------
+
+test("redaction: emails and phone numbers removed; URLs, domains and IPs defanged", async () => {
+  const { redactReportText } = await import("../src/apps/transparency.js");
+  const r = redactReportText("Mail me at victim@example.org or +1 (555) 123-4567. The page https://login.evil.example/x?a=1 on 203.0.113.9 copies bank.example.com");
+  assert.doesNotMatch(r, /victim@example\.org|555/);
+  assert.match(r, /\[email removed\]/);
+  assert.match(r, /\[phone removed\]/);
+  assert.match(r, /hxxps:\/\/login\[\.\]evil\[\.\]example/);
+  assert.match(r, /203\[\.\]0\[\.\]113\[\.\]9/);
+  assert.match(r, /bank\[\.\]example\[\.\]com/);
+});
+
+async function reportAndAct(h, c, { description, noPublish = false, action = "suspend" }) {
+  h.cookies = new Map();
+  const body = { target: `app:${c.id}`, category: "phishing", description, "orbit-verify-response": "good-token", ...(noPublish ? { no_publish: "yes" } : {}) };
+  await h.request("/report", { method: "POST", body: new URLSearchParams(body).toString(), headers: { "CF-Connecting-IP": "198.51.100.8" } });
+  const rep = await h.db.prepare("SELECT * FROM reports WHERE description = ?").bind(description).first();
+  await consoleLogin(h, USERS.olga);
+  await post(h, `/admin/target/app/${c.id}/${action}`, { reason: "Phishing page confirmed" }, await csrfOf(h, "/admin/reports"));
+  return rep;
+}
+
+test("transparency: decisions are public at once; reports only after the operator publishes them, redacted, honouring the opt-out", async () => {
+  const h = await consoleSetup();
+  await consoleLogin(h, USERS.alice);
+  const c = await createApp(h);
+  h.txt["_roamid-app.example.org"] = [`roamid-app=${c.id}`];
+  await post(h, `/console/app/${c.id}/check`, {});
+  const rep = await reportAndAct(h, c, { description: "Fake login at https://app.example.org/x, write to me: me@reporter.example" });
+  let tj = await (await h.request("/transparency.json")).json();
+  assert.equal(tj.items.length, 1);
+  const d = tj.items[0];
+  assert.deepEqual({ target_id: d.target_id, domain: d.domain, category: d.category, decision: d.decision, reason: d.reason }, { target_id: c.id, domain: "example.org", category: "phishing", decision: "suspend", reason: "Phishing page confirmed" });
+  const raw = JSON.stringify(tj);
+  assert.doesNotMatch(raw, /198\.51|reporter|olga|context|sub/, "no reporter data and no operator id");
+  assert.equal((await (await h.request("/transparency.json?kind=publications")).json()).items.length, 0, "nothing published without confirmation");
+  assert.equal((await h.db.prepare("SELECT outcome FROM reports WHERE id = ?").bind(rep.id).first()).outcome, "upheld");
+  // The operator publishes; the text is redacted again on the server.
+  const page = await (await h.request(`/admin/target/app/${c.id}`)).text();
+  assert.match(page, /\[email removed\]/, "the form is prefilled redacted");
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: rep.id, text: "Fake login, contact me@reporter.example via https://app.example.org/x" }, await csrfOf(h, "/admin/reports"));
+  const pubs = (await (await h.request("/transparency.json?kind=publications")).json()).items;
+  assert.equal(pubs.length, 1);
+  assert.doesNotMatch(pubs[0].text, /me@reporter|https:\/\/app\.example/);
+  assert.match(pubs[0].text, /hxxps/);
+  // Opt-out: category and decision only, whatever text is submitted.
+  await post(h, `/admin/target/app/${c.id}/restore`, { reason: "Fixed" }, await csrfOf(h, "/admin/reports"));
+  const rep2 = await reportAndAct(h, c, { description: "Second report with private details here", noPublish: true });
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: rep2.id, text: "Second report with private details here" }, await csrfOf(h, "/admin/reports"));
+  const p2 = (await (await h.request("/transparency.json?kind=publications")).json()).items.find((x) => x.text.includes("asked not to publish"));
+  assert.ok(p2 && !/private details/.test(p2.text));
+  // A dismissed report is published only with an explicit choice.
+  await post(h, `/admin/target/app/${c.id}/restore`, { reason: "Fixed again" }, await csrfOf(h, "/admin/reports"));
+  const rep3 = await reportAndAct(h, c, { description: "Third report that was not right", action: "dismiss" });
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: rep3.id, text: "x" }, await csrfOf(h, "/admin/reports"));
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM publications WHERE report_id = ?").bind(rep3.id).first()).n, 0);
+  await post(h, `/admin/target/app/${c.id}/publish`, { report_id: rep3.id, text: "Not a phishing page.", publish_dismissed: "yes" }, await csrfOf(h, "/admin/reports"));
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM publications WHERE report_id = ?").bind(rep3.id).first()).n, 1);
+});
+
+test("appeals from GitHub: bearer token, one queue item per issue", async () => {
+  const h = await consoleSetup();
+  h.env.APPEAL_TOKEN = "appeal-token-123";
+  const call = (tok, body) => h.request("/admin/appeal", { method: "POST", body: JSON.stringify(body), headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" } });
+  assert.equal((await call("wrong", { issue: 3, login: "x", target_kind: "app", target_id: "spa", text: "please review" })).status, 401);
+  const ok = await call("appeal-token-123", { issue: 3, login: "someone", target_kind: "app", target_id: "spa", text: "please review this decision" });
+  assert.equal(ok.status, 200);
+  assert.equal((await call("appeal-token-123", { issue: 3, login: "someone", target_kind: "app", target_id: "spa", text: "please review this decision" })).status, 200);
+  assert.equal((await h.db.prepare("SELECT COUNT(*) AS n FROM reports WHERE kind = 'appeal'").first()).n, 1);
+  assert.equal((await call("appeal-token-123", { issue: 4, login: "someone", target_kind: "app", target_id: "nope", text: "please review" })).status, 404);
+});
+
+test("no workflow or script approves pull requests", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const files = [...readdirSync(new URL("../.github/workflows/", import.meta.url)).map((f) => `../.github/workflows/${f}`), ...readdirSync(new URL("../scripts/", import.meta.url)).map((f) => `../scripts/${f}`)];
+  for (const f of files) {
+    const s = readFileSync(new URL(f, import.meta.url), "utf8");
+    assert.doesNotMatch(s, /\/reviews\b|event:\s*["']?APPROVE|gh pr review|--approve/i, f);
+  }
+});

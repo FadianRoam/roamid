@@ -1,0 +1,36 @@
+name: transparency
+
+# Mirror the instance's public record (/transparency.json) into
+# transparency/ and publish reports the operator released as issues.
+# Reads JSON as data only (scripts/transparency-sync.mjs).
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: transparency
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Dependencies
+        run: npm ci --ignore-scripts
+      - name: Sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/transparency-sync.mjs

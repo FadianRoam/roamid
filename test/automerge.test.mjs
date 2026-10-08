@@ -108,3 +108,19 @@ test("review fails closed: live data or a block list unavailable gives a tempora
   assert.equal((await reviewClients([entry("good")], doc, net({ apps: false }))).temporary, true);
   assert.equal((await reviewClients([entry("good")], doc, net({ lists: false }))).temporary, true);
 });
+
+test("transparency sync: values are escaped, no mentions, no markup; issues once per publication", async () => {
+  const { md, renderMonth, issueFor, sync } = await import("../scripts/transparency-sync.mjs");
+  const s = md("@owner <script>x</script> | **b** `c` https://evil.example");
+  assert.doesNotMatch(s, /@owner|<script>|\| \*\*|https:\/\//);
+  const month = renderMonth("2026-10", [{ id: 1, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", domain: "x.org", category: "phishing", decision: "suspend", reason: "line1\n| injected | row" }]);
+  assert.equal(month.trim().split("\n").filter((l) => l.startsWith("| 1 ")).length, 1, "one row, no injected rows");
+  const iss = issueFor({ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "@everyone see <img src=x>", decision_id: 1 }, [{ id: 1, date: "2026-10-08T12:00:00Z", decision: "suspend" }]);
+  assert.doesNotMatch(iss.body, /@everyone|<img/);
+  const calls = [];
+  const api = async (path, opt = {}) => { calls.push([opt.method || "GET", path]); if (path.startsWith("/contents/")) { if (!opt.method) throw new Error("404"); return {}; } if (path.startsWith("/issues?")) return [{ number: 9, state: "open", body: "<!-- roamid-publication:5 -->" }]; if (path === "/issues") return { number: 10 }; return {}; };
+  const fetchFn = async (u) => Response.json(String(u).includes("publications") ? { items: [{ id: 5, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", text: "t" }, { id: 6, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-y", category: "fraud", text: "u" }], next_after: null } : { items: [{ id: 1, date: "2026-10-08T12:00:00Z", target_kind: "app", target_id: "app-x", category: "phishing", decision: "suspend", reason: "r" }], next_after: null });
+  await sync({ api, fetchFn, log() {} });
+  assert.equal(calls.filter(([m, p]) => m === "POST" && p === "/issues").length, 1, "publication 5 has an issue already; only 6 is opened");
+  assert.ok(calls.some(([m, p]) => m === "PUT" && p === "/contents/transparency/2026/10.md"));
+});

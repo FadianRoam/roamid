@@ -16,6 +16,8 @@
 - Scripted conformance checks (`scripts/conformance.mjs`, [docs/conformance.md](docs/conformance.md)).
 - Operator runbook, SAML certificate rotation and abuse limits in `docs/operations.md`.
 - New error codes: `app_suspended`, `app_banned`, `app_unverified`, `app_development`, `app_new_limit`.
+- Public record of operator decisions: `/transparency.json`, mirrored hourly into `transparency/YYYY/MM.md` and `.json`; reports the operator publishes (redacted, reporter opt-out honoured) as issues labelled `report-upheld`.
+- Appeals with the `appeal.yml` issue form, delivered to the operator queue.
 - XML signatures: exclusive canonicalization without comments only; transforms limited to enveloped-signature and exclusive canonicalization.
 
 ## 1.0.0 (2026-10-08)

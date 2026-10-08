@@ -168,6 +168,8 @@ ${target ? `<input type="hidden" name="target" value="${esc(`${target.kind}:${ta
 <label class="field"><span class="lbl">${esc(t(v.lang, "rep_description"))}</span><textarea class="prose" name="description" rows="5" required minlength="10" maxlength="4000">${esc(f.description || "")}</textarea></label>
 <label class="field"><span class="lbl">${esc(t(v.lang, "rep_email"))}</span><input type="email" name="contact_email" maxlength="254" value="${esc(f.contact_email || "")}"><span class="hint">${esc(t(v.lang, "rep_email_hint"))}</span></label>
 <div class="orbit-verify" data-sitekey="${esc(sitekey || "")}" data-action="report" data-lang="${v.lang === "zh" ? "zh" : "en"}"></div>
+<label class="check"><input type="checkbox" name="no_publish" value="yes"> ${esc(t(v.lang, "rep_no_publish"))}</label>
+<p class="hint">${esc(t(v.lang, "rep_publish_note"))}</p>
 <p class="hint">${esc(t(v.lang, "rep_privacy"))}</p>
 <div class="btnrow"><button class="pill" type="submit" id="send-report">${esc(t(v.lang, "rep_send"))}</button></div>
 </div></div></form>`;
@@ -190,10 +192,23 @@ export function adminTarget(v, { s, kind, id, name, info, reports, audit, action
   const act = (action, label, { reason = true, danger = false } = {}) => `<form class="act" method="post" action="/admin/target/${esc(kind)}/${esc(id)}/${action}">${csrfField(s)}${reason ? `<input name="reason" required maxlength="500" placeholder="${esc(t(v.lang, "adm_reason"))}">` : ""}<button class="pill ${danger ? "danger" : "ghost"}" type="submit" id="act-${action}">${esc(label)}</button></form>`;
   const body = `<p class="crumb"><a href="/admin/reports">${esc(t(v.lang, "adm_title"))}</a></p><h1 class="title">${esc(name || id)}</h1>${userBar(v.lang, s)}
 ${sec(t(v.lang, "c_details"), kv(info))}
-${sec(t(v.lang, "adm_reports"), reports.length ? reports.map((r) => `<div class="report ${r.state}" id="${esc(r.id)}"><p><span class="badge">${esc(r.kind === "appeal" ? t(v.lang, "adm_appeal") : t(v.lang, "rep_cat_" + r.category))}</span> <span class="mono">${esc(when(r.created_at))}</span> <span class="mono">${esc(r.id)}</span> ${r.state === "open" ? "" : `<span class="badge">${esc(t(v.lang, "adm_closed"))}</span>`}${r.ticket ? ` <span class="mono">#${esc(r.ticket)}</span>` : ""}</p><p class="pre">${esc(r.description)}</p>${r.contact_email ? `<p class="mono">${esc(r.contact_email)}</p>` : ""}${r.context ? `<p class="mono hint">${esc(r.context)}</p>` : ""}</div>`).join("") : "-")}
+${sec(t(v.lang, "adm_reports"), reports.length ? reports.map((r) => `<div class="report ${r.state}" id="${esc(r.id)}"><p><span class="badge">${esc(r.kind === "appeal" ? t(v.lang, "adm_appeal") : t(v.lang, "rep_cat_" + r.category))}</span> <span class="mono">${esc(when(r.created_at))}</span> <span class="mono">${esc(r.id)}</span> ${r.state === "open" ? "" : `<span class="badge">${esc(t(v.lang, "adm_closed"))}</span>`}${r.ticket ? ` <span class="mono">#${esc(r.ticket)}</span>` : ""}</p><p class="pre">${esc(r.description)}</p>${r.contact_email ? `<p class="mono">${esc(r.contact_email)}</p>` : ""}${r.context ? `<p class="mono hint">${esc(r.context)}</p>` : ""}${publishForm(v, s, kind, id, r)}</div>`).join("") : "-")}
 ${sec(t(v.lang, "adm_actions"), actions.map(([a, label, o]) => act(a, label, o)).join(""))}
 ${sec(t(v.lang, "c_history"), audit.length ? `<div class="scroll"><table class="tbl stack"><tbody>${audit.map((r) => `<tr><td class="mono">${esc(when(r.at))}</td><td>${esc(t(v.lang, "act_" + r.action))}</td><td>${esc(reasonText(v.lang, r.reason))}</td><td class="mono">${esc((r.actor || "").slice(0, 12))}</td></tr>`).join("")}</tbody></table></div>` : "-")}`;
   return page(v, name || id, body);
+}
+
+// "Publish report" for a closed report: upheld ones directly, dismissed ones
+// only with an explicit choice. The text is prefilled redacted and editable.
+function publishForm(v, s, kind, id, r) {
+  if (r.kind !== "report" || r.state !== "closed") return "";
+  if (r.published) return `<p class="hint">${esc(t(v.lang, "adm_published"))}</p>`;
+  const L = v.lang;
+  const inner = `<form class="form pub" method="post" action="/admin/target/${esc(kind)}/${esc(id)}/publish">${csrfField(s)}<input type="hidden" name="report_id" value="${esc(r.id)}">
+${r.no_publish ? `<p class="hint">${esc(t(L, "adm_pub_optout"))}</p>` : `<label class="field"><span class="lbl">${esc(t(L, "adm_pub_text"))}</span><textarea class="prose" name="text" rows="5" maxlength="4000">${esc(r.prefill)}</textarea></label>`}
+${r.outcome === "upheld" ? "" : `<label class="check"><input type="checkbox" name="publish_dismissed" value="yes" required> ${esc(t(L, "adm_pub_dismissed"))}</label>`}
+<div class="btnrow"><button class="pill ghost" type="submit" id="publish-${esc(r.id)}">${esc(t(L, "adm_publish"))}</button></div></form>`;
+  return r.outcome === "upheld" ? inner : `<details class="pubd"><summary>${esc(t(L, "adm_publish_dismissed"))}</summary>${inner}</details>`;
 }
 
 export function forbiddenPage(v, { s }) {

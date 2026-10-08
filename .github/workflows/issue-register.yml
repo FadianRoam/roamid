@@ -1,6 +1,7 @@
 name: issue-register
 
-# Registration issue forms -> pull requests (scripts/issue-register.mjs).
+# Registration issue forms -> pull requests, appeal forms -> the operator
+# queue (scripts/issue-register.mjs).
 # Runs on the base repository with main checked out. The issue body is read
 # from the event as data, validated, and only the resulting JSON entry is
 # committed to a bot branch; nothing from the issue is executed.
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   register:
-    if: contains(github.event.issue.labels.*.name, 'registration')
+    if: contains(github.event.issue.labels.*.name, 'registration') || contains(github.event.issue.labels.*.name, 'appeal')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -36,4 +37,5 @@ jobs:
       - name: Issue to pull request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPEAL_TOKEN: ${{ secrets.APPEAL_TOKEN }}
         run: node scripts/issue-register.mjs

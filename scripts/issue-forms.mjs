@@ -36,3 +36,9 @@ export const IDP_FORM = {
   "Contact email / 联系邮箱": "email",
 };
 export const labelsOf = (form) => Object.fromEntries(Object.entries(form).map(([l, k]) => [k, l]));
+export const APPEAL_FORM = {
+  "Target type / 对象类型": "target_type",
+  "Target / 对象": "target_id",
+  "Decision record / 处理记录": "decision",
+  "Statement / 申诉说明": "text",
+};

@@ -9,14 +9,15 @@
 // the automatic review, identity providers wait for a maintainer.
 import { readFileSync } from "node:fs";
 import { buildClient, clientInstructions, buildIdp, idpInstructions, parseIssueForm, findSecrets, redactIssue, quote } from "./scaffold.mjs";
-import { APP_FORM, IDP_FORM, labelsOf } from "./issue-forms.mjs";
+import { APP_FORM, IDP_FORM, APPEAL_FORM, labelsOf } from "./issue-forms.mjs";
 import { githubApi } from "./automerge.mjs";
 
 const b64 = (s) => Buffer.from(s, "utf8").toString("base64");
 
 // Returns { action: "refused"|"invalid"|"opened"|"updated"|"ignored", ... } and performs it through `api`.
-export async function handleIssue(issue, { api, repo, log = console.log }) {
+export async function handleIssue(issue, { api, repo, log = console.log, appeal = postAppeal }) {
   const labels = (issue.labels || []).map((l) => (typeof l === "string" ? l : l.name));
+  if (labels.includes("appeal") && issue.state === "open") return handleAppeal(issue, { api, log, appeal });
   if (!labels.includes("registration") || issue.state !== "open") return { action: "ignored" };
   const kind = labels.includes("identity-provider") ? "idp" : labels.includes("application") ? "app" : null;
   if (!kind) return { action: "ignored" };
@@ -85,6 +86,35 @@ export async function handleIssue(issue, { api, repo, log = console.log }) {
   await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\n${kind === "app" ? "When the checks pass and the domain is proven, it is merged automatically and live about 5 minutes later." : "A maintainer reviews identity providers (docs/registry.md)."}`);
   log(`#${issue.number}: ${open[0] ? "updated" : "opened"} PR #${pr.number} (${path})`);
   return { action: open[0] ? "updated" : "opened", pr: pr.number, path, entry };
+}
+
+// Appeals: the statement goes to the operator's queue through the RoamID
+// instance (APPEAL_TOKEN); nothing is committed.
+async function postAppeal(body) {
+  const r = await fetch(`${process.env.ROAMID_URL || "https://id.fadianro.am"}/admin/appeal`, { method: "POST", headers: { Authorization: `Bearer ${process.env.APPEAL_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+
+async function handleAppeal(issue, { api, log, appeal }) {
+  const comment = (body) => api(`/issues/${issue.number}/comments`, { method: "POST", body: { body } });
+  const f = parseIssueForm(issue.body, APPEAL_FORM);
+  const secrets = findSecrets({ text: f.text || "" }).length ? ["text"] : [];
+  if (secrets.length) {
+    await api(`/issues/${issue.number}`, { method: "PATCH", body: { body: redactIssue(issue.body, labelsOf(APPEAL_FORM), secrets) } });
+    await comment("The statement looked like it contained a secret. It was removed from this issue; please write the appeal again without it.");
+    return { action: "refused", reason: "secret" };
+  }
+  const target_id = String(f.target_id || "").trim().toLowerCase();
+  if (!/^[a-z0-9-]{2,64}$/.test(target_id) || String(f.text || "").trim().length < 5) {
+    await comment("The appeal needs the target identifier (client_id or identity provider id) and a statement. Edit the issue to add them.");
+    return { action: "invalid" };
+  }
+  const r = await appeal({ issue: issue.number, login: issue.user.login, target_kind: /identity/.test(f.target_type || "") ? "idp" : "app", target_id, text: `${f.text}${f.decision ? `\n\nDecision record: ${f.decision}` : ""}\n\nGitHub issue #${issue.number}` });
+  if (r.status === 404) { await comment(`${quote(target_id, 64)} is not a registered application or identity provider. Edit the issue to correct it.`); return { action: "invalid" }; }
+  if (r.status !== 200) { log(`#${issue.number}: appeal not delivered (${r.status})`); throw new Error(`appeal endpoint: HTTP ${r.status}`); }
+  if (!r.body.duplicate) await comment("Received. The appeal is in the operator's queue; the decision is recorded in transparency/ and answered here.");
+  log(`#${issue.number}: appeal ${r.body.id}`);
+  return { action: "appeal", id: r.body.id };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
