@@ -1,8 +1,8 @@
 # Error codes (v1) / 错误码
 
-Shown on the RoamID error page together with a request ID, and sent to the application as `error_description=roamid:<code>` where the error is returned to it ([rp-integration.md](rp-integration.md) section 7). When reporting a problem, quote the code and the request ID.
+Shown on the RoamID error page together with a request ID, and sent to the application as `error_description=roamid:<code>` where the error is returned to it ([rp-integration.md](rp-integration.md) section 7). SAML service providers receive a SAML Response with a non-success status and the code in `StatusMessage`. When reporting a problem, quote the code and the request ID.
 
-RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error_description=roamid:<code>` 给出（[rp-integration.md](zh-CN/rp-integration.md) 第 7 节）。报告问题时请提供错误码与请求 ID。
+RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error_description=roamid:<code>` 给出（[rp-integration.md](zh-CN/rp-integration.md) 第 7 节）。SAML 服务方收到非成功状态的 SAML 响应，错误码在 `StatusMessage` 中。报告问题时请提供错误码与请求 ID。
 
 | Code / 错误码 | English | 中文 |
 |---|---|---|
@@ -27,7 +27,19 @@ RoamID 错误页显示错误码与请求 ID；错误返回给应用时以 `error
 | `registry_unavailable` | The registry is not loaded yet. Try again in a minute. | 登记表尚未载入。请一分钟后再试。 |
 | `not_found` | This page does not exist. | 此页面不存在。 |
 | `server_error` | An internal error occurred. | 发生内部错误。 |
+| `saml_request` | The service's SAML request is not valid. | 该服务的 SAML 请求无效。 |
+| `saml_bad_xml` | The SAML message is not acceptable XML. | SAML 消息不是可接受的 XML。 |
+| `saml_invalid` | The identity provider's SAML response did not pass verification. | 身份提供方的 SAML 响应未通过校验。 |
+| `saml_unsigned` | The identity provider's SAML response is not signed. | 身份提供方的 SAML 响应没有签名。 |
+| `saml_signature_invalid` | The signature of the SAML response does not verify. | SAML 响应的签名校验失败。 |
+| `saml_algorithm` | The SAML message uses an algorithm that is not allowed. | SAML 消息使用了不允许的算法。 |
+| `saml_expired` | The SAML response has expired or is not yet valid. | SAML 响应已过期或尚未生效。 |
+| `saml_replay` | This SAML response was already used. | 此 SAML 响应已被使用。 |
+| `saml_subject` | The SAML response has no stable user identifier. | SAML 响应中没有稳定的用户标识。 |
+| `saml_status` | The identity provider reported an error. | 身份提供方报告了错误。 |
+| `saml_metadata` | The identity provider's SAML metadata could not be loaded or has expired. | 无法载入身份提供方的 SAML 元数据，或元数据已过期。 |
+| `saml_decrypt_failed` | The encrypted SAML assertion could not be decrypted. | 无法解密加密的 SAML 断言。 |
 
-Errors that an identity provider returns in its authorization response are counted as `upstream_<error>` and passed to the application as described in rp-integration.md.
+Errors that an identity provider returns are counted as `upstream_<error>` and passed to the application as described in rp-integration.md.
 
-身份提供方在授权响应中返回的错误记为 `upstream_<error>`，按 rp-integration.md 所述转交应用。
+身份提供方返回的错误记为 `upstream_<error>`，按 rp-integration.md 所述转交应用。

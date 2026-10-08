@@ -12,12 +12,18 @@ import { sectorOf } from "../registry/validate.js";
 import { authoritativeDomains } from "../registry/domains.js";
 import { authorizeUrl, completeLogin, normalize, subjectFor, verifyWithJwks, UpstreamError } from "./upstream.js";
 import { pickLang, pickTheme, localName, t } from "../ui/i18n.js";
-import { pickerPage, errorPage, messagePage } from "../ui/pages.js";
+import { pickerPage, errorPage, messagePage, postPage } from "../ui/pages.js";
+import { samlStart, samlLogin, readSamlPost } from "../saml/sp.js";
+import { readAuthnRequest, successForm, errorForm, samlStatusFor, samlSp } from "../saml/idp.js";
+import { SamlError } from "../saml/xml.js";
 
 export const TX_TTL = 600;
 export const CODE_TTL = 60;
 export const TOKEN_TTL = 3600;
 export const BINDING_COOKIE = "__Host-rid_b";
+// The same binding for SAML identity providers, whose Response arrives by a
+// cross-site POST that does not carry SameSite=Lax cookies.
+export const BINDING_COOKIE_POST = "__Host-rid_bp";
 export const LAST_COOKIE = "__Host-rid_last";
 const SCOPES = ["openid", "email", "profile"];
 
@@ -66,11 +72,12 @@ function view(request, extra = {}) {
   return { lang: pickLang(request, extra), theme: pickTheme(request), nonce: newNonce(), path: new URL(request.url).pathname + new URL(request.url).search };
 }
 
-function errorHtml(request, code, { status = 400, detail, backUrl, rpName, uiLocales } = {}) {
+function errorHtml(request, code, { status = 400, detail, back, backUrl, rpName, uiLocales } = {}) {
   const v = view(request, { uiLocales });
   const rid = reqId(request);
   console.warn("[roamid] error", code, rid, detail || "");
-  return html(errorPage({ ...v, path: "/", code, requestId: rid, detail, backUrl, rpName }), { status, nonce: v.nonce });
+  const b = back || (backUrl ? { url: backUrl } : null);
+  return html(errorPage({ ...v, path: "/", code, requestId: rid, detail, backUrl: b && b.url, backForm: b && b.form, rpName }), { status });
 }
 
 function rpRedirect(env, redirectUri, params) {
@@ -84,9 +91,16 @@ function rpError(env, tx, error, description) {
   return rpRedirect(env, tx.redirect_uri, { error, error_description: description, state: tx.state });
 }
 
-function activeClient(reg, clientId) {
+// The way back to the service with an error: a redirect (OIDC) or a signed
+// SAML Response to post (SAML).
+function back(env, tx, error, description) {
+  if (tx.proto === "saml2") return { form: errorForm(env, { acs: tx.redirect_uri, requestId: tx.saml_req_id, relayState: tx.relay_state, ...samlStatusFor(error), message: description }) };
+  return { url: rpError(env, tx, error, description) };
+}
+
+function activeClient(reg, clientId, proto = "oidc") {
   const c = reg.clients.get(String(clientId || ""));
-  return c && c.status === "active" && c.protocol === "oidc" ? c : null;
+  return c && c.status === "active" && c.protocol === proto ? c : null;
 }
 
 // The IdPs a client may use, in registry order.
@@ -101,9 +115,12 @@ async function loadTx(env, id) {
   return tx && tx.expires > now() ? tx : null;
 }
 
-async function bindingOk(request, tx) {
-  const b = getCookie(request, BINDING_COOKIE);
-  return !!b && safeEqual(await sha256b64url(b), tx.binding);
+async function bindingOk(request, tx, { post = false } = {}) {
+  for (const name of post ? [BINDING_COOKIE, BINDING_COOKIE_POST] : [BINDING_COOKIE]) {
+    const b = getCookie(request, name);
+    if (b && safeEqual(await sha256b64url(b), tx.binding)) return true;
+  }
+  return false;
 }
 
 // ---- /authorize ------------------------------------------------------------
@@ -163,39 +180,50 @@ export async function authorize(request, env) {
     if (!chosen) return back("interaction_required", "an identity provider must be chosen");
   }
   if (prompts.includes("select_account")) chosen = hint ? chosen : null;
-
-  const binding = getCookie(request, BINDING_COOKIE) || randomToken(32);
-  const tx = {
-    id: randomToken(24), binding: await sha256b64url(binding), client_id: client.client_id, redirect_uri: redirectUri, scope,
-    state, nonce, code_challenge: cc, prompt: prompts.filter((p) => p !== "select_account").join(" ") || null, max_age: maxAge,
+  return startTx(request, env, client, {
+    proto: "oidc", redirect_uri: redirectUri, scope, state, nonce, code_challenge: cc,
+    prompt: prompts.filter((p) => p !== "select_account").join(" ") || null, max_age: maxAge,
     login_hint: (q.get("login_hint") || "").slice(0, 254) || null, acr_values: (q.get("acr_values") || "").slice(0, 200) || null,
-    ui_locales: (uiLocales || "").slice(0, 50) || null, expires: now() + TX_TTL,
+    ui_locales: (uiLocales || "").slice(0, 50) || null,
+  }, chosen);
+}
+
+// Record the transaction, bind it to this browser, and go to the picker (or
+// straight to the identity provider when it is already decided).
+export async function startTx(request, env, client, f, chosen) {
+  const binding = getCookie(request, BINDING_COOKIE) || getCookie(request, BINDING_COOKIE_POST) || randomToken(32);
+  const tx = {
+    id: randomToken(24), binding: await sha256b64url(binding), client_id: client.client_id, redirect_uri: f.redirect_uri, scope: f.scope || "openid email profile",
+    state: f.state || null, nonce: f.nonce || null, code_challenge: f.code_challenge || null, prompt: f.prompt || null, max_age: f.max_age ?? null,
+    login_hint: f.login_hint || null, acr_values: f.acr_values || null, ui_locales: f.ui_locales || null, expires: now() + TX_TTL,
+    proto: f.proto || "oidc", saml_req_id: f.saml_req_id || null, relay_state: f.relay_state || null,
   };
   await env.DB.prepare(
-    `INSERT INTO tx (id, binding, client_id, redirect_uri, scope, state, nonce, code_challenge, prompt, max_age, login_hint, acr_values, ui_locales, expires)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(tx.id, tx.binding, tx.client_id, tx.redirect_uri, tx.scope, tx.state, tx.nonce, tx.code_challenge, tx.prompt, tx.max_age, tx.login_hint, tx.acr_values, tx.ui_locales, tx.expires).run();
+    `INSERT INTO tx (id, binding, client_id, redirect_uri, scope, state, nonce, code_challenge, prompt, max_age, login_hint, acr_values, ui_locales, expires, proto, saml_req_id, relay_state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(tx.id, tx.binding, tx.client_id, tx.redirect_uri, tx.scope, tx.state, tx.nonce, tx.code_challenge, tx.prompt, tx.max_age, tx.login_hint, tx.acr_values, tx.ui_locales, tx.expires, tx.proto, tx.saml_req_id, tx.relay_state).run();
   await count(env, "started", { client: client.client_id });
   const cookies = [cookie(BINDING_COOKIE, binding, { maxAge: 3600 })];
-  if (chosen) return goUpstream(request, env, tx, chosen, cookies);
+  if (chosen) return goUpstream(request, env, tx, chosen, binding, cookies);
   return redirect(`/select?tx=${encodeURIComponent(tx.id)}`, { status: 303, cookies });
 }
 
-async function goUpstream(request, env, tx, idp, cookies = []) {
+async function goUpstream(request, env, tx, idp, binding, cookies = []) {
   let up;
   try {
-    up = await authorizeUrl(env, idp, tx);
+    up = idp.protocol === "saml2" ? await samlStart(env, idp, tx) : await authorizeUrl(env, idp, tx);
   } catch (e) {
-    const code = e instanceof UpstreamError ? e.code : "server_error";
+    const code = e instanceof UpstreamError || e instanceof SamlError ? e.code : "server_error";
     await count(env, "failed", { idp: idp.id, client: tx.client_id, code });
     const reg = await getRegistry(env);
     const client = reg.clients.get(tx.client_id);
-    return errorHtml(request, code, { status: 502, detail: e.message, backUrl: rpError(env, tx, "temporarily_unavailable", `roamid:${code}`), rpName: localName(client, pickLang(request)), uiLocales: tx.ui_locales });
+    return errorHtml(request, code, { status: 502, detail: e.message, back: back(env, tx, "temporarily_unavailable", `roamid:${code}`), rpName: localName(client, pickLang(request)), uiLocales: tx.ui_locales });
   }
-  if (up.url && tx.acr_values) { const u = new URL(up.url); u.searchParams.set("acr_values", tx.acr_values); up.url = u.toString(); }
-  await env.DB.prepare("UPDATE tx SET idp = ?, up_state = ?, up_nonce = ?, up_verifier = ? WHERE id = ?")
-    .bind(idp.id, await sha256b64url(up.state), up.nonce, up.verifier, tx.id).run();
-  return redirect(up.url, { status: 303, cookies: [...cookies, cookie(LAST_COOKIE, idp.id, { maxAge: 365 * 86400 })] });
+  if (idp.protocol !== "saml2" && tx.acr_values) { const u = new URL(up.url); u.searchParams.set("acr_values", tx.acr_values); up.url = u.toString(); }
+  await env.DB.prepare("UPDATE tx SET idp = ?, up_state = ?, up_nonce = ?, up_verifier = ?, up_req_id = ? WHERE id = ?")
+    .bind(idp.id, await sha256b64url(up.state), up.nonce || null, up.verifier || null, up.requestId || null, tx.id).run();
+  const extra = idp.protocol === "saml2" ? [cookie(BINDING_COOKIE_POST, binding, { maxAge: TX_TTL, sameSite: "None" })] : [];
+  return redirect(up.url, { status: 303, cookies: [...cookies, ...extra, cookie(LAST_COOKIE, idp.id, { maxAge: 365 * 86400 })] });
 }
 
 // ---- /select ---------------------------------------------------------------
@@ -208,7 +236,7 @@ export async function select(request, env) {
   if (!tx || tx.idp) return errorHtml(request, "tx_expired");
   if (!(await bindingOk(request, tx))) return errorHtml(request, "tx_browser");
   const reg = await getRegistry(env);
-  const client = activeClient(reg, tx.client_id);
+  const client = activeClient(reg, tx.client_id, tx.proto);
   if (!client) return errorHtml(request, "invalid_client");
   const allowed = idpsFor(reg, client);
   const lang = pickLang(request, { uiLocales: tx.ui_locales });
@@ -218,11 +246,11 @@ export async function select(request, env) {
     if (!idp) return errorHtml(request, "idp_unknown", { uiLocales: tx.ui_locales });
     if (idp.status !== "active") return errorHtml(request, "idp_disabled", { uiLocales: tx.ui_locales });
     if (!allowed.includes(idp)) return errorHtml(request, "idp_not_allowed", { uiLocales: tx.ui_locales });
-    return goUpstream(request, env, tx, idp);
+    return goUpstream(request, env, tx, idp, getCookie(request, BINDING_COOKIE));
   }
   const v = view(request, { uiLocales: tx.ui_locales });
   const health = await healthMap(env);
-  return html(pickerPage({ ...v, lang, tx: tx.id, client, redirectUri: tx.redirect_uri, idps: allowed, last: getCookie(request, LAST_COOKIE), cancelUrl: rpError(env, tx, "access_denied", "the user cancelled"), health }));
+  return html(pickerPage({ ...v, lang, tx: tx.id, client, redirectUri: tx.redirect_uri, idps: allowed, last: getCookie(request, LAST_COOKIE), cancelUrl: tx.proto === "saml2" ? `/saml/idp/cancel?tx=${encodeURIComponent(tx.id)}` : rpError(env, tx, "access_denied", "the user cancelled"), health }));
 }
 
 export async function healthMap(env) {
@@ -246,12 +274,12 @@ export async function callback(request, env, idpId) {
   const del = await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
   if (!del.meta || del.meta.changes !== 1) return errorHtml(request, "tx_expired");
   const reg = await getRegistry(env);
-  const client = activeClient(reg, tx.client_id);
+  const client = activeClient(reg, tx.client_id, tx.proto);
   if (!client) return errorHtml(request, "invalid_client");
   const rpName = localName(client, pickLang(request, { uiLocales: tx.ui_locales }));
   const fail = async (code, detail, rpErr = "server_error") => {
     await count(env, "failed", { idp: idpId, client: tx.client_id, code });
-    return errorHtml(request, code, { status: 400, detail, backUrl: rpError(env, tx, rpErr, `roamid:${code}`), rpName, uiLocales: tx.ui_locales });
+    return errorHtml(request, code, { status: 400, detail, back: back(env, tx, rpErr, `roamid:${code}`), rpName, uiLocales: tx.ui_locales });
   };
   // Each IdP has its own callback path, and the transaction remembers which
   // one it went to: a response for one provider at another's path is a mix-up.
@@ -265,7 +293,8 @@ export async function callback(request, env, idpId) {
     // Pass the provider's standard errors through (prompt=none answers,
     // a cancelled sign-in); anything else becomes access_denied.
     const pass = ["login_required", "interaction_required", "consent_required", "account_selection_required", "access_denied", "temporarily_unavailable"];
-    return redirect(rpError(env, tx, pass.includes(e) ? e : "access_denied", `roamid:upstream_error ${e}`));
+    const b = back(env, tx, pass.includes(e) ? e : "access_denied", `roamid:upstream_error ${e}`);
+    return b.url ? redirect(b.url) : deliverForm(request, tx, rpName, b.form);
   }
   const code = q.get("code");
   if (!code || code.length > 2048) return fail("upstream_bad_response", "no authorization code");
@@ -276,17 +305,112 @@ export async function callback(request, env, idpId) {
     return fail(e instanceof UpstreamError ? e.code : "server_error", e.message);
   }
   const domains = await authoritativeDomains(env, idp);
-  const claims = normalize(idp, upstream, domains);
-  const sub = await subjectFor(idp.id, upstream.sub, client, client.subject_type === "pairwise" ? sectorOf(client) : null);
+  return finishLogin(request, env, tx, client, idp, upstream.sub, normalize(idp, upstream, domains), rpName);
+}
+
+function deliverForm(request, tx, rpName, form) {
+  const v = view(request, { uiLocales: tx.ui_locales });
+  return html(postPage({ ...v, path: "/", form, rpName }));
+}
+
+// The sign-in succeeded at the identity provider: derive RoamID's subject
+// and hand the result to the service (an authorization code, or a SAML
+// Response posted to its ACS URL).
+export async function finishLogin(request, env, tx, client, idp, upstreamSub, claims, rpName) {
+  const sub = await subjectFor(idp.id, upstreamSub, client, client.subject_type === "pairwise" ? sectorOf(client) : null);
   const t0 = now();
   const full = { sub, idp: idp.id, idp_name: idp.name.en, ...claims, auth_time: claims.auth_time || t0 };
+  await count(env, "completed", { idp: idp.id, client: tx.client_id });
+  if (tx.proto === "saml2") {
+    const form = successForm(env, { sp: client, acs: tx.redirect_uri, requestId: tx.saml_req_id, relayState: tx.relay_state, nameId: sub, claims: full, authnInstant: full.auth_time });
+    return deliverForm(request, tx, rpName, form);
+  }
   const ourCode = randomToken(32);
   await env.DB.prepare(
     `INSERT INTO codes (code_hash, client_id, redirect_uri, code_challenge, nonce, scope, idp, claims, auth_time, expires)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(await sha256b64url(ourCode), tx.client_id, tx.redirect_uri, tx.code_challenge, tx.nonce, tx.scope, idp.id, JSON.stringify(full), full.auth_time, t0 + CODE_TTL).run();
-  await count(env, "completed", { idp: idp.id, client: tx.client_id });
   return redirect(rpRedirect(env, tx.redirect_uri, { code: ourCode, state: tx.state }));
+}
+
+// ---- SAML: /saml/acs/<idp> (from identity providers) -------------------------
+
+export async function samlAcs(request, env, idpId) {
+  if (request.method !== "POST") return errorHtml(request, "saml_invalid", { status: 405 });
+  if (!(await allow(env, "authorize", await clientIp(request, env)))) return errorHtml(request, "rate_limited", { status: 429 });
+  const f = await readSamlPost(request);
+  if (!f || !f.response || !f.relayState || f.relayState.length > 200) return errorHtml(request, "tx_expired");
+  const tx = await env.DB.prepare("SELECT * FROM tx WHERE up_state = ?").bind(await sha256b64url(f.relayState)).first();
+  if (!tx || tx.expires <= now()) return errorHtml(request, "tx_expired");
+  if (!(await bindingOk(request, tx, { post: true }))) return errorHtml(request, "tx_browser");
+  const del = await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
+  if (!del.meta || del.meta.changes !== 1) return errorHtml(request, "tx_expired");
+  const reg = await getRegistry(env);
+  const client = activeClient(reg, tx.client_id, tx.proto);
+  if (!client) return errorHtml(request, "invalid_client");
+  const rpName = localName(client, pickLang(request, { uiLocales: tx.ui_locales }));
+  const fail = async (code, detail, rpErr = "server_error") => {
+    await count(env, "failed", { idp: idpId, client: tx.client_id, code });
+    return errorHtml(request, code, { status: 400, detail, back: back(env, tx, rpErr, `roamid:${code}`), rpName, uiLocales: tx.ui_locales });
+  };
+  if (tx.idp !== idpId) return fail("upstream_issuer_mismatch", "ACS path does not match the chosen identity provider");
+  const idp = reg.idps.get(idpId);
+  if (!idp || idp.status !== "active" || idp.protocol !== "saml2") return fail("idp_disabled");
+  let r;
+  try {
+    r = await samlLogin(env, idp, tx, f.response);
+  } catch (e) {
+    if (e instanceof SamlError && e.code === "saml_status") return fail("upstream_error", e.message, /NoPassive/.test(e.message) ? "login_required" : "access_denied");
+    return fail(e instanceof SamlError ? e.code : "server_error", e.message);
+  }
+  return finishLogin(request, env, tx, client, idp, r.sub, r.claims, rpName);
+}
+
+// ---- SAML: /saml/idp/sso and /saml/idp/cancel (from service providers) -------
+
+export async function samlSso(request, env) {
+  if (!(await allow(env, "authorize", await clientIp(request, env)))) return errorHtml(request, "rate_limited", { status: 429 });
+  const reg = await getRegistry(env);
+  if (!reg.commit) return errorHtml(request, "registry_unavailable", { status: 503 });
+  const url = new URL(request.url);
+  let ar;
+  if (request.method === "GET" && url.searchParams.get("sp") && !url.searchParams.get("SAMLRequest")) {
+    // IdP-initiated: no AuthnRequest, the first registered ACS URL.
+    const sp = samlSp(reg, url.searchParams.get("sp"), { byClientId: true });
+    if (!sp) return errorHtml(request, "invalid_client", { detail: `sp: ${url.searchParams.get("sp").slice(0, 80)}` });
+    ar = { sp, requestId: null, acs: sp.acs_urls[0], relayState: (url.searchParams.get("RelayState") || "").slice(0, 1024) || null, prompt: null };
+  } else {
+    try {
+      ar = await readAuthnRequest(request, env);
+    } catch (e) {
+      if (e.sp && e.acs) {
+        const form = errorForm(env, { acs: e.acs, requestId: e.requestId, relayState: e.relayState, status: e.status, sub: e.sub, message: e.message });
+        return errorHtml(request, "saml_request", { detail: e.message, back: { form }, rpName: localName(e.sp, pickLang(request)) });
+      }
+      return errorHtml(request, e instanceof SamlError ? e.code : "saml_request", { detail: e.message });
+    }
+  }
+  const allowed = idpsFor(reg, ar.sp);
+  const hint = url.searchParams.get("idp_hint");
+  let chosen = hint ? allowed.find((i) => i.id === hint) || null : null;
+  if (!chosen && ar.prompt === "none") {
+    chosen = allowed.find((i) => i.id === getCookie(request, LAST_COOKIE)) || null;
+    if (!chosen) {
+      const form = errorForm(env, { acs: ar.acs, requestId: ar.requestId, relayState: ar.relayState, ...samlStatusFor("interaction_required"), message: "an identity provider must be chosen" });
+      return deliverForm(request, {}, localName(ar.sp, pickLang(request)), form);
+    }
+  }
+  return startTx(request, env, ar.sp, { proto: "saml2", redirect_uri: ar.acs, saml_req_id: ar.requestId, relay_state: ar.relayState, prompt: ar.prompt }, chosen);
+}
+
+export async function samlCancel(request, env) {
+  const tx = await loadTx(env, new URL(request.url).searchParams.get("tx"));
+  if (!tx || tx.proto !== "saml2" || tx.idp) return errorHtml(request, "tx_expired");
+  if (!(await bindingOk(request, tx))) return errorHtml(request, "tx_browser");
+  await env.DB.prepare("DELETE FROM tx WHERE id = ?").bind(tx.id).run();
+  const reg = await getRegistry(env);
+  const client = reg.clients.get(tx.client_id);
+  return deliverForm(request, tx, localName(client, pickLang(request)), back(env, tx, "access_denied", "the user cancelled").form);
 }
 
 // ---- /token ----------------------------------------------------------------

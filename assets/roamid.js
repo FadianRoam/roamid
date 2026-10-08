@@ -96,6 +96,10 @@
     update();
   }
 
+  // ---- SAML: post the message on load
+  var ap = $("form[data-autopost]");
+  if (ap) { var bt = $("button", ap); if (bt) bt.disabled = true; setTimeout(function () { ap.submit(); }, 50); setTimeout(function () { if (bt) bt.disabled = false; }, 3000); }
+
   // ---- demo application (public client with PKCE), runs in the browser
   var demo = $("#demo");
   if (demo) {

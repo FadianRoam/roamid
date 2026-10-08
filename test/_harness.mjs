@@ -8,6 +8,7 @@ import { resetMemo } from "../src/registry/store.js";
 import { resetUpstreamCaches } from "../src/oidc/upstream.js";
 import { importPrivate, sign, publicJwk } from "../src/lib/jwt.js";
 import { b64url, randomToken, sha256b64url, sha256hex } from "../src/lib/b64.js";
+import { SAML_KEYS } from "./_saml.mjs";
 
 export const BASE = "https://id.example.test";
 const REGISTRY_URL = "https://registry.example.test/registry.json";
@@ -86,7 +87,7 @@ export function clientEntry(client_id, extra = {}) {
     post_logout_redirect_uris: [`https://rp.example.test/${client_id}/bye`], token_endpoint_auth_method: "none", status: "active", ...extra };
 }
 
-export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra = {} } = {}) {
+export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra = {}, extraIdps = [] } = {}) {
   resetMemo(); resetUpstreamCaches();
   const db = memoryD1();
   const signing = await genKey("ES256", "sig-test");
@@ -95,12 +96,12 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
   const h = {
     db, rpKey, rpSigner: await importPrivate(rpKey), txt, idps: {}, net: [],
     env: { DB: db, BASE_URL: BASE, REGISTRY_URL, SIGNING_KEYS: JSON.stringify([signing]), CLIENT_KEYS: JSON.stringify([client]),
-      ADMIN_TOKEN: "admin-token-0123456789", IDP_SECRET_GOOD: "upstream-secret", IDP_SECRET_EVIL: "upstream-secret", IDP_SECRET_OFF: "upstream-secret" },
+      SAML_KEYS, ADMIN_TOKEN: "admin-token-0123456789", IDP_SECRET_GOOD: "upstream-secret", IDP_SECRET_EVIL: "upstream-secret", IDP_SECRET_OFF: "upstream-secret" },
   };
   for (const [id, host] of Object.entries(idpSpecs || { good: "idp.example.test" })) h.idps[id] = await new MockIdp(host).init();
   h.registry = {
     version: 1, commit: "a".repeat(40), generated_at: new Date().toISOString(),
-    idps: Object.entries(h.idps).map(([id, idp]) => idpEntry(idp, id)),
+    idps: [...Object.entries(h.idps).map(([id, idp]) => idpEntry(idp, id)), ...extraIdps],
     clients: clients || [clientEntry("spa")],
     ...registryExtra,
   };

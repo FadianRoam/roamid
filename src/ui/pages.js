@@ -83,12 +83,13 @@ function contentPage({ lang, theme, path, active, title, body, narrow = false })
 }
 
 const hostOf = (u) => { try { return new URL(u).host; } catch { return ""; } };
+const idpHost = (i) => hostOf(i.issuer || i.sso_url || i.metadata_url || i.entity_id);
 const dotClass = (h) => (["up", "degraded", "down"].includes(h) ? h : "unknown");
 
 // ---- landing ----------------------------------------------------------------
 
 export function homePage({ lang, theme, idps = [], health = {} }) {
-  const rows = idps.slice(0, 2).map((i) => `<li class="row" aria-hidden="true"><span class="dot ${dotClass(health[i.id])}"></span><span class="t"><span class="n">${esc(localName(i, lang))}</span><span class="h">${esc(hostOf(i.issuer))}</span></span><span class="tick"></span></li>`).join("");
+  const rows = idps.slice(0, 2).map((i) => `<li class="row" aria-hidden="true"><span class="dot ${dotClass(health[i.id])}"></span><span class="t"><span class="n">${esc(localName(i, lang))}</span><span class="h">${esc(idpHost(i))}</span></span><span class="tick"></span></li>`).join("");
   const body = `<div class="hero" data-page="landing"><div class="stage">
 ${nav({ lang, theme, path: "/", active: "" })}
 <h1 class="display"><span>${esc(t(lang, "hero_l1"))}</span><span>${esc(t(lang, "hero_l2"))}</span></h1>
@@ -112,7 +113,7 @@ export function pickerPage({ lang, theme, path, tx, client, redirectUri, idps, l
   const checked = ordered[0] && ordered[0].id;
   const row = (idp) => {
     const h = health[idp.id];
-    const host = hostOf(idp.issuer);
+    const host = idpHost(idp);
     const q = `${idp.name.en} ${idp.name.zh || ""} ${idp.id} ${host}`.toLowerCase();
     const tags = [idp.id === last ? t(lang, "pick_last") : "", h === "down" ? t(lang, "status_down") : h === "degraded" ? t(lang, "status_degraded") : ""].filter(Boolean).join(" · ");
     return `<li data-q="${esc(q)}"><label class="row"><input type="radio" name="idp" value="${esc(idp.id)}"${idp.id === checked ? " checked" : ""}><span class="dot ${dotClass(h)}" title="${esc(t(lang, "status_" + (["up", "degraded", "down"].includes(h) ? h : "unknown")))}"></span><span class="t"><span class="n">${esc(localName(idp, lang))}</span><span class="h">${esc(host)}</span></span>${tags ? `<span class="tag">${esc(tags)}</span>` : ""}<span class="tick"></span></label></li>`;
@@ -137,11 +138,21 @@ ${nav({ lang, theme, path, active: "" })}
 
 // ---- content pages -------------------------------------------------------------
 
-export function errorPage({ lang, theme, path, code, requestId, detail, backUrl, rpName }) {
+const hiddenFields = (fields) => Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
+
+// The page that carries a SAML message to a service provider by HTTP-POST.
+// assets/roamid.js submits it on load; without JavaScript the button does.
+export function postPage({ lang, theme, path, form, rpName }) {
+  const body = `<h1 class="title">${esc(t(lang, "post_title", { rp: rpName || "" }))}</h1><p class="lead">${esc(t(lang, "post_lead"))}</p>
+<form method="post" action="${esc(form.action)}" data-autopost>${hiddenFields(form.fields)}<div class="btnrow"><button class="pill" type="submit">${esc(t(lang, "post_continue"))}</button></div></form>`;
+  return contentPage({ lang, theme, path, active: "", title: t(lang, "post_title", { rp: rpName || "" }), body, narrow: true });
+}
+
+export function errorPage({ lang, theme, path, code, requestId, detail, backUrl, backForm, rpName }) {
   const body = `<h1 class="title">${esc(t(lang, "err_title"))}</h1>
 <div class="alert">${icon("alert")}<div><p>${esc(errorText(lang, code))}</p>${detail ? `<p class="mono">${esc(detail)}</p>` : ""}
 <div class="kv"><div>${esc(t(lang, "err_code"))}</div><div class="mono" data-code>${esc(code)}</div><div>${esc(t(lang, "err_request"))}</div><div class="mono">${esc(requestId)}</div></div></div></div>
-<div class="btnrow">${backUrl ? `<a class="pill" href="${esc(backUrl)}">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</a>` : ""}<a class="pill ghost" href="/">${esc(t(lang, "err_home"))}</a></div>`;
+<div class="btnrow">${backUrl ? `<a class="pill" href="${esc(backUrl)}">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</a>` : ""}${backForm ? `<form method="post" action="${esc(backForm.action)}">${hiddenFields(backForm.fields)}<button class="pill" type="submit">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</button></form>` : ""}<a class="pill ghost" href="/">${esc(t(lang, "err_home"))}</a></div>`;
   return contentPage({ lang, theme, path, active: "", title: t(lang, "err_title"), body, narrow: true });
 }
 
@@ -156,7 +167,7 @@ function healthBadge(lang, idp, h) {
 }
 
 export function idpsPage({ lang, theme, idps, health = {} }) {
-  const rows = idps.map((i) => `<tr><td><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span></td><td><code>${esc(i.issuer)}</code></td><td>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
+  const rows = idps.map((i) => `<tr><td><b>${esc(localName(i, lang))}</b><br><span class="mono">${esc(i.id)}</span></td><td><code>${esc(i.issuer || i.entity_id || i.metadata_url)}</code>${i.protocol === "saml2" ? ' <span class="badge">SAML</span>' : ""}</td><td>${(i.email_domains || []).map((d) => `<code>${esc(d)}</code>`).join("<br>") || "-"}</td><td>${healthBadge(lang, i, health[i.id])}</td></tr>`).join("");
   const body = `<h1 class="title">${esc(t(lang, "idps_title"))}</h1><p class="lead">${esc(t(lang, "idps_lead"))}</p>
 <div class="section box"><div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "col_name"))}</th><th>${esc(t(lang, "col_issuer"))}</th><th>${esc(t(lang, "col_domains"))}</th><th>${esc(t(lang, "col_status"))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>
 <p class="lead"><a href="/idps.json">/idps.json</a></p>`;
@@ -202,4 +213,18 @@ export function demoPage({ lang, theme, path, clientId }) {
 <div id="demo" data-client="${esc(clientId)}"><div class="btnrow" id="start"><button class="pill" id="signin" type="button">${esc(t(lang, "demo_signin"))}</button></div><div id="out" aria-live="polite"></div></div>
 <script type="application/json" id="demo-text">${JSON.stringify(L).replace(/</g, "\\u003c")}</script>`;
   return contentPage({ lang, theme, path, active: "demo", title: t(lang, "demo_title"), body });
+}
+
+// /demo/saml: the built-in SAML service provider.
+export function samlDemoPage({ lang, theme, path, result }) {
+  let out = "";
+  if (result && result.ok) {
+    const rows = [["NameID", result.nameId], ["NameID Format", result.nameIdFormat], ...result.attributes.map((a) => [a.friendly || a.name, a.values.join(", ")])];
+    out = `<div class="section"><h2>${esc(t(lang, "demo_saml_result"))}</h2><div class="scroll"><table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td><code>${esc(v)}</code></td></tr>`).join("")}</tbody></table></div></div>`;
+  } else if (result) {
+    out = `<div class="alert">${icon("alert")}<div><p>${esc(t(lang, "demo_failed"))}</p><p class="mono" data-code>${esc(result.error)}</p></div></div>`;
+  }
+  const body = `<h1 class="title">${esc(t(lang, "demo_saml_title"))}</h1><p class="lead">${esc(t(lang, "demo_saml_lead"))}</p>
+<div class="btnrow"><a class="pill" id="saml-signin" href="/demo/saml/start">${esc(result && result.ok ? t(lang, "demo_again") : t(lang, "demo_signin"))}</a><a class="pill ghost" href="/saml/idp/metadata.xml">IdP metadata</a></div>${out}`;
+  return contentPage({ lang, theme, path, active: "demo", title: t(lang, "demo_saml_title"), body });
 }

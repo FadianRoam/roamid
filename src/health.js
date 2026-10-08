@@ -5,6 +5,7 @@
 
 import { discovery, UpstreamError, resetUpstreamCaches } from "./oidc/upstream.js";
 import { now } from "./lib/http.js";
+import { samlHealth } from "./saml/metadata.js";
 
 async function probe(idp) {
   try {
@@ -23,7 +24,7 @@ async function probe(idp) {
 export async function probeIdps(env, reg) {
   const t = now();
   const active = [...reg.idps.values()].filter((i) => i.status === "active");
-  const results = await Promise.all(active.map(async (idp) => ({ idp, ...(await probe(idp)) })));
+  const results = await Promise.all(active.map(async (idp) => ({ idp, ...(idp.protocol === "saml2" ? await samlHealth(env, idp) : await probe(idp)) })));
   for (const r of results) {
     await env.DB.prepare(
       `INSERT INTO idp_health (idp, state, checked_at, last_ok, last_error) VALUES (?, ?, ?, ?, ?)

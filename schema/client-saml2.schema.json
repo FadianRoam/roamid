@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://id.fadianro.am/schema/client-saml2.schema.json",
+  "title": "RoamID relying party entry (SAML 2.0 service provider)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "client_id",
+    "protocol",
+    "name",
+    "homepage",
+    "contact",
+    "entity_id",
+    "acs_urls",
+    "status"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "client_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{2,64}$",
+      "description": "Permanent identifier. Also the file name. Never changes."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "saml2"
+      ]
+    },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "zh": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 300
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "github",
+        "email"
+      ],
+      "properties": {
+        "github": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        }
+      }
+    },
+    "entity_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "The service provider's entityID (the Issuer of its AuthnRequests and the Audience of RoamID's assertions)."
+    },
+    "acs_urls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 500
+      },
+      "description": "AssertionConsumerService URLs (HTTP-POST), compared exactly."
+    },
+    "sign_cert": {
+      "type": "string",
+      "minLength": 100,
+      "maxLength": 8000,
+      "description": "When present, AuthnRequests must be signed with this certificate's key."
+    },
+    "allowed_idps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]{2,32}$"
+      }
+    },
+    "subject_type": {
+      "type": "string",
+      "enum": [
+        "public",
+        "pairwise"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    }
+  }
+}

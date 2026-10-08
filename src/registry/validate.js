@@ -9,9 +9,13 @@
 //   checkImmutable(base, head)  -> [errors]                     CI only
 
 import idpSchema from "../../schema/idp.schema.json" with { type: "json" };
+import idpSamlSchema from "../../schema/idp-saml2.schema.json" with { type: "json" };
 import clientSchema from "../../schema/client.schema.json" with { type: "json" };
+import clientSamlSchema from "../../schema/client-saml2.schema.json" with { type: "json" };
 
-export { idpSchema, clientSchema };
+export { idpSchema, idpSamlSchema, clientSchema, clientSamlSchema };
+
+const CERT_RE = /^(-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----\s*|[A-Za-z0-9+/=\s]+)$/;
 
 export const LIMITS = { idps: 500, clients: 5000, bytes: 2 * 1024 * 1024 };
 export const ID_RE = /^[a-z0-9-]{2,32}$/;
@@ -89,6 +93,7 @@ export function redirectUriErrors(s, field) {
 
 export function validateIdp(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return ["entry: must be an object"];
+  if (entry.protocol === "saml2") return validateSamlIdp(entry);
   const errs = checkSchema(idpSchema, entry);
   if (errs.length) return errs;
   errs.push(...httpsUrl(entry.issuer, "issuer"));
@@ -99,6 +104,28 @@ export function validateIdp(entry) {
   if (new Set(doms).size !== doms.length) errs.push("email_domains: a domain is listed twice");
   return errs;
 }
+
+function validateSamlIdp(entry) {
+  const errs = checkSchema(idpSamlSchema, entry);
+  if (errs.length) return errs;
+  errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
+  if (entry.metadata_url) {
+    errs.push(...httpsUrl(entry.metadata_url, "metadata_url", { allowQuery: true }));
+    if (entry.sso_url || entry.certs) errs.push("sso_url and certs: not allowed with metadata_url (they come from the metadata)");
+  } else {
+    if (!entry.entity_id) errs.push("entity_id: required without metadata_url");
+    if (!entry.sso_url) errs.push("sso_url: required without metadata_url");
+    else errs.push(...httpsUrl(entry.sso_url, "sso_url", { allowQuery: true }));
+    if (!entry.certs) errs.push("certs: required without metadata_url");
+  }
+  (entry.certs || []).forEach((c, i) => { if (!CERT_RE.test(c)) errs.push(`certs[${i}]: not a certificate`); });
+  const doms = (entry.email_domains || []).map(domainBase);
+  if (new Set(doms).size !== doms.length) errs.push("email_domains: a domain is listed twice");
+  return errs;
+}
+
+// The key that must be unique across identity providers.
+export const idpKey = (e) => (e.protocol === "saml2" ? `saml:${e.entity_id || e.metadata_url}` : `oidc:${e.issuer}`);
 
 // "*.example.org" -> "example.org"; "example.org" -> "example.org".
 export const domainBase = (d) => String(d).replace(/^\*\./, "");
@@ -131,6 +158,7 @@ export function emailInDomain(email, d) {
 
 export function validateClient(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return ["entry: must be an object"];
+  if (entry.protocol === "saml2") return validateSamlClient(entry);
   const errs = checkSchema(clientSchema, entry);
   if (errs.length) return errs;
   errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
@@ -155,9 +183,19 @@ export function validateClient(entry) {
   return errs;
 }
 
-// The sector of a pairwise client: the one host its redirect URIs share.
+function validateSamlClient(entry) {
+  const errs = checkSchema(clientSamlSchema, entry);
+  if (errs.length) return errs;
+  errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
+  entry.acs_urls.forEach((u, i) => errs.push(...redirectUriErrors(u, `acs_urls[${i}]`)));
+  if (entry.sign_cert && !CERT_RE.test(entry.sign_cert)) errs.push("sign_cert: not a certificate");
+  if (entry.subject_type === "pairwise" && new Set(entry.acs_urls.map((u) => parseUrl(u)?.host)).size !== 1) errs.push("subject_type pairwise: all acs_urls must be on one host (the sector)");
+  return errs;
+}
+
+// The sector of a pairwise client: the one host its redirect (or ACS) URLs share.
 export function sectorOf(client) {
-  return new URL(client.redirect_uris[0]).host;
+  return new URL((client.redirect_uris || client.acs_urls)[0]).host;
 }
 
 // Load a registry document entry by entry. An invalid entry is dropped with
@@ -172,12 +210,12 @@ export function validateRegistry(doc, { strict = false } = {}) {
   const list = (v) => (Array.isArray(v) ? v : []);
   if (list(doc && doc.idps).length > LIMITS.idps) dropped.push({ kind: "registry", id: "idps", errors: [`more than ${LIMITS.idps} identity providers`] });
   if (list(doc && doc.clients).length > LIMITS.clients) dropped.push({ kind: "registry", id: "clients", errors: [`more than ${LIMITS.clients} clients`] });
-  const ids = new Set(), issuers = new Set(), cids = new Set();
+  const ids = new Set(), issuers = new Set(), cids = new Set(), spIds = new Set();
   for (const e of list(doc && doc.idps).slice(0, LIMITS.idps)) {
     const id = e && typeof e.id === "string" ? e.id : "(unknown)";
     const errs = validateIdp(e);
     if (!errs.length && ids.has(e.id)) errs.push("id: duplicate");
-    if (!errs.length && issuers.has(e.issuer)) errs.push("issuer: already registered by another entry");
+    if (!errs.length && issuers.has(idpKey(e))) errs.push(`${e.protocol === "saml2" ? "entity_id" : "issuer"}: already registered by another entry`);
     if (!errs.length) {
       for (const d of e.email_domains || []) {
         const other = idps.find((o) => (o.email_domains || []).some((od) => domainsOverlap(d, od)));
@@ -185,17 +223,18 @@ export function validateRegistry(doc, { strict = false } = {}) {
       }
     }
     if (errs.length) { dropped.push({ kind: "idp", id, errors: errs }); continue; }
-    ids.add(e.id); issuers.add(e.issuer); idps.push(e);
+    ids.add(e.id); issuers.add(idpKey(e)); idps.push(e);
   }
   for (const e of list(doc && doc.clients).slice(0, LIMITS.clients)) {
     const id = e && typeof e.client_id === "string" ? e.client_id : "(unknown)";
     const errs = validateClient(e);
     if (!errs.length && cids.has(e.client_id)) errs.push("client_id: duplicate");
+    if (!errs.length && e.protocol === "saml2" && spIds.has(e.entity_id)) errs.push("entity_id: already registered by another entry");
     if (!errs.length && strict && e.allowed_idps) {
       for (const a of e.allowed_idps) if (!ids.has(a)) errs.push(`allowed_idps: unknown identity provider ${a}`);
     }
     if (errs.length) { dropped.push({ kind: "client", id, errors: errs }); continue; }
-    cids.add(e.client_id); clients.push(e);
+    cids.add(e.client_id); if (e.protocol === "saml2") spIds.add(e.entity_id); clients.push(e);
   }
   return { idps, clients, dropped };
 }

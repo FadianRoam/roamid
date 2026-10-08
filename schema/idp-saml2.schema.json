@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://id.fadianro.am/schema/idp-saml2.schema.json",
+  "title": "RoamID identity provider entry (SAML 2.0)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "protocol",
+    "name",
+    "homepage",
+    "contact",
+    "sub_source",
+    "email_attribute_verified",
+    "status"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{2,32}$",
+      "description": "Permanent identifier. Also the file name and the callback path segment. Never changes."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "saml2"
+      ]
+    },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "zh": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 300
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "github",
+        "email"
+      ],
+      "properties": {
+        "github": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        }
+      }
+    },
+    "metadata_url": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 500,
+      "description": "https URL of the provider's SAML metadata. Refreshed by RoamID; validUntil is enforced."
+    },
+    "entity_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "The provider's entityID. Required without metadata_url; must match the metadata when both are given."
+    },
+    "sso_url": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 500,
+      "description": "HTTP-Redirect SingleSignOnService URL. Only without metadata_url."
+    },
+    "certs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "string",
+        "minLength": 100,
+        "maxLength": 8000
+      },
+      "description": "Signing certificates (PEM or base64 DER). Only without metadata_url."
+    },
+    "sub_source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "\"nameid\" (a persistent NameID) or the Name / FriendlyName of an attribute with a stable, non-reassigned identifier, for example urn:oasis:names:tc:SAML:attribute:subject-id."
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "preferred_username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "description": "Attribute Name or FriendlyName per claim, when the defaults are not used."
+    },
+    "email_attribute_verified": {
+      "type": "boolean",
+      "description": "true when the provider only releases email addresses it has verified."
+    },
+    "email_domains": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "description": "Email domains this provider is authoritative for. Each is proven by a DNS TXT record _roamid.<domain> containing roamid-idp=<id>. \"*.example.org\" covers subdomains of example.org only.",
+      "items": {
+        "type": "string",
+        "maxLength": 253,
+        "pattern": "^(\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    }
+  }
+}

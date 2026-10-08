@@ -8,7 +8,11 @@ import { clientIp } from "./lib/edgesig.js";
 import { summary } from "./lib/events.js";
 import { getRegistry, syncRegistry } from "./registry/store.js";
 import { checkDomainProofs, proofState } from "./registry/domains.js";
-import { discoveryDoc, authorize, select, callback, token, userinfo, logout, healthMap } from "./oidc/op.js";
+import { discoveryDoc, authorize, select, callback, token, userinfo, logout, healthMap, samlAcs, samlSso, samlCancel } from "./oidc/op.js";
+import { spMetadataHandler } from "./saml/sp.js";
+import { idpMetadataHandler } from "./saml/idp.js";
+import { demoSamlStart, demoSamlAcs, demoSamlPage } from "./saml/demo.js";
+import { samlKeys, certInfo } from "./saml/certs.js";
 import { probeIdps } from "./health.js";
 import { pickLang, pickTheme, LANG_COOKIE, THEME_COOKIE, localName } from "./ui/i18n.js";
 import { homePage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
@@ -24,7 +28,7 @@ function view(request) {
 }
 
 function publicIdp(i, health) {
-  return { id: i.id, protocol: i.protocol, name: i.name, issuer: i.issuer, homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, health: health[i.id] || "unknown" };
+  return { id: i.id, protocol: i.protocol, name: i.name, ...(i.protocol === "saml2" ? { entity_id: i.entity_id || null, metadata_url: i.metadata_url || null } : { issuer: i.issuer }), homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, health: health[i.id] || "unknown" };
 }
 
 async function statusData(env) {
@@ -38,8 +42,21 @@ async function statusData(env) {
     try { for (const k of JSON.parse(raw || "[]")) created[k.kid] = k.created || null; } catch { /* ignore */ }
     return list.keys.map((k) => ({ kid: k.kid, alg: k.alg, created: created[k.kid] || null }));
   };
-  let keys = { signing: [], client: [] };
-  try { keys = { signing: keyInfo((await signingKeys(env)).jwks, env.SIGNING_KEYS), client: keyInfo((await clientKeys(env)).jwks, env.CLIENT_KEYS) }; } catch (e) { keys.error = e.message; }
+  let keys = { signing: [], client: [], saml: [] };
+  try { keys = { signing: keyInfo((await signingKeys(env)).jwks, env.SIGNING_KEYS), client: keyInfo((await clientKeys(env)).jwks, env.CLIENT_KEYS), saml: [] }; } catch (e) { keys.error = e.message; }
+  // SAML certificates: warn 30 days before expiry.
+  const warnings = [];
+  try {
+    for (const k of samlKeys(env)) {
+      const i = certInfo(k.cert);
+      keys.saml.push({ kid: k.kid, alg: "RS256 X.509", created: k.created, not_after: iso(i.notAfter) });
+      if (i.notAfter - t < 30 * 86400) warnings.push(`SAML certificate ${k.kid} expires ${iso(i.notAfter)}`);
+    }
+  } catch (e) { keys.saml_error = e.message; }
+  for (const idp of reg.idps.values()) {
+    if (idp.protocol !== "saml2" || !idp.certs) continue;
+    for (const c of idp.certs) { try { const i = certInfo(c); if (i.notAfter - t < 30 * 86400) warnings.push(`${idp.id}: signing certificate expires ${iso(i.notAfter)}`); } catch { warnings.push(`${idp.id}: a certificate cannot be read`); } }
+  }
   return {
     version: VERSION,
     deployment: env.CF_VERSION_METADATA ? env.CF_VERSION_METADATA.id : null,
@@ -52,6 +69,7 @@ async function statusData(env) {
     idp_health: (health || []).map((h) => ({ idp: h.idp, state: h.state, checked_at: iso(h.checked_at), last_ok: iso(h.last_ok), last_error: h.last_error })),
     domains: (proofs || []).map((p) => ({ domain: p.domain, idp: p.idp, state: proofState(p, t), verified_at: iso(p.verified_at), checked_at: iso(p.checked_at), failing_since: iso(p.failing_since), last_error: p.last_error })),
     keys,
+    warnings,
     counts: await summary(env, 7),
   };
 }
@@ -96,6 +114,13 @@ export async function handle(request, env, ctx) {
   if (p === "/userinfo") return userinfo(request, env);
   if (p === "/logout" && (m === "GET" || m === "POST")) return logout(request, env);
   if (p === "/admin/sync") return adminSync(request, env);
+  if (p === "/saml/sp/metadata.xml" && m === "GET") return spMetadataHandler(request, env);
+  if (p === "/saml/idp/metadata.xml" && m === "GET") return idpMetadataHandler(env);
+  if (p === "/saml/idp/sso" && (m === "GET" || m === "POST")) return samlSso(request, env);
+  if (p === "/saml/idp/cancel" && m === "GET") return samlCancel(request, env);
+  if (p.startsWith("/saml/acs/")) return samlAcs(request, env, decodeURIComponent(p.slice(10)));
+  if (p === "/demo/saml/start" && m === "GET") return demoSamlStart(env);
+  if (p === "/demo/saml/acs" && m === "POST") return demoSamlAcs(request, env, view(request));
   if (p === "/prefs" && m === "GET") return prefs(request);
   if (m !== "GET" && m !== "HEAD") return json({ error: "method_not_allowed" }, { status: 405 });
   if (p === "/idps.json") {
@@ -114,7 +139,8 @@ export async function handle(request, env, ctx) {
     return html(idpsPage({ ...v, idps: [...reg.idps.values()], health: await healthMap(env) }), { nonce: v.nonce });
   }
   if (p === "/status") return html(statusPage({ ...v, s: await statusData(env) }), { nonce: v.nonce });
-  if (p === "/demo" || p === "/demo/callback") return html(demoPage(v), { nonce: v.nonce });
+  if (p === "/demo" || p === "/demo/callback") return html(demoPage(v));
+  if (p === "/demo/saml") return demoSamlPage(v);
   if (p === "/robots.txt") return text("User-agent: *\nDisallow: /authorize\nDisallow: /select\nDisallow: /callback/\nDisallow: /demo/callback\n", { cache: PUBLIC_CACHE });
   if (p === "/favicon.ico") return new Response(null, { status: 204, headers: { "Cache-Control": PUBLIC_CACHE } });
   return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404, nonce: v.nonce });

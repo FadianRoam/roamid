@@ -5,6 +5,8 @@
 name = "roamid"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
+# node:crypto for XML signatures (xml-crypto).
+compatibility_flags = ["nodejs_compat"]
 # account_id = "<your account id>"
 
 # Not served on workers.dev.
@@ -52,3 +54,4 @@ enabled = true
 #   ADMIN_TOKEN         bearer token for POST /admin/sync
 #   CDN_KEY             key of the edge's signed origin header (optional)
 #   IDP_SECRET_<ID>     client secret at an identity provider that uses client_secret_*
+#   SAML_KEYS           JSON array of {kid, cert, key} (PEM), SAML signing and encryption
