@@ -420,6 +420,8 @@ export async function samlSso(request, env) {
     const rc = await resolveClient(env, reg, url.searchParams.get("sp"), "saml2");
     if (!rc) return errorHtml(request, "invalid_client", { detail: `sp: ${url.searchParams.get("sp").slice(0, 80)}` });
     const sp = rc.client;
+    // Only applications that opted in (idp_initiated: true) accept an unsolicited response.
+    if (sp.idp_initiated !== true) return errorHtml(request, "invalid_request", { detail: "IdP-initiated sign-in is not enabled for this application" });
     ar = { sp, gate: rc.gate, requestId: null, acs: sp.acs_urls[0], relayState: (url.searchParams.get("RelayState") || "").slice(0, 1024) || null, prompt: null };
   } else {
     try {

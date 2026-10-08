@@ -74,6 +74,7 @@ ${field("jwks_uri", t(v.lang, "c_f_jwks"), `<input name="jwks_uri" type="url" ma
 <div class="when-saml">
 ${field("entity_id", t(v.lang, "c_f_entity"), `<input name="entity_id" maxlength="300" spellcheck="false" value="${val("entity_id")}">`)}
 ${field("acs_urls", t(v.lang, "c_f_acs"), `<textarea name="acs_urls" rows="2" spellcheck="false">${lines("acs_urls")}</textarea>`, t(v.lang, "c_f_redirects_hint"))}
+<label class="check"><input type="checkbox" name="idp_initiated" value="yes"${f.idp_initiated ? " checked" : ""}> ${esc(t(v.lang, "c_f_idp_initiated"))}</label>
 ${field("sign_cert", t(v.lang, "c_f_sign_cert"), `<textarea name="sign_cert" rows="3" spellcheck="false">${val("sign_cert")}</textarea>`, t(v.lang, "c_f_optional"))}
 </div>
 ${field("subject_type", t(v.lang, "c_f_subject"), `<select name="subject_type">${opt("public", t(v.lang, "c_subject_public"), f.subject_type || "public")}${opt("pairwise", t(v.lang, "c_subject_pairwise"), f.subject_type || "public")}</select>`)}
@@ -124,9 +125,9 @@ ${role === "owner" ? sec(t(L, "c_delete"), `<form method="post" action="/console
   return page(v, localName(app, L), body);
 }
 
-export function invitePage(v, { s, invite, app, ok, error }) {
+export function invitePage(v, { s, invite, app, ok, error, domain }) {
   const body = `<h1 class="title">${esc(t(v.lang, "c_invite_title"))}</h1>${userBar(v.lang, s)}
-${error ? notice(esc(t(v.lang, "c_invite_err_" + error)), "warn") : ""}
+${error ? notice(esc(t(v.lang, "c_invite_err_" + error, { domain: domain || "" })), "warn") : ""}
 ${app && !error ? `<p class="lead">${esc(t(v.lang, "c_invite_for", { app: localName(app, v.lang) }))} <span class="mono">${esc(invite.email)}</span></p>
 <form method="post" action="/console/invite/${esc(ok)}">${csrfField(s)}<div class="btnrow"><button class="pill" type="submit" id="accept-invite">${esc(t(v.lang, "c_invite_accept"))}</button></div></form>` : ""}
 <div class="btnrow"><a class="pill ghost" href="/console">${esc(t(v.lang, "c_title"))}</a></div>`;

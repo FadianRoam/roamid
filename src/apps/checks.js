@@ -129,6 +129,14 @@ export async function checkApp(entry, ctx = {}) {
     if (field === "homepage" && e.some((x) => x.code === "url_localhost_active")) { errors.push(err("url_localhost_active", field, "the homepage must be a public https page")); continue; }
     errors.push(...e);
   }
+  // A SAML application's entity ID is an https URL on its own domain (or a
+  // subdomain): it is the Audience of the assertions RoamID issues, so it
+  // must not name another service.
+  if (entry.protocol === "saml2") {
+    let u = null; try { u = new URL(String(entry.entity_id || "")); } catch { /* not a URL */ }
+    const okHost = u && u.protocol === "https:" && !u.username && !u.password && !u.port && domain && inDomain(u.hostname.toLowerCase(), domain);
+    if (!okHost) errors.push(err("entity_domain", "entity_id", `must be an https URL on ${domain || "the application's domain"} or a subdomain of it`));
+  }
   const hosts = [...new Set(urls.map(([, u]) => hostOf(u)).filter((h) => h && !LOOPBACK.has(h) && h !== "[::1]"))];
   if (!errors.length) {
     if (ctx.banned && (await ctx.banned(domain))) errors.push(err("domain_banned", "domain", "this domain belongs to an application that was banned"));

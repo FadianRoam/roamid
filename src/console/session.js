@@ -38,8 +38,8 @@ export async function loginCallback(request, env) {
   const tok = await res.json();
   const claims = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))));
   const sid = randomToken(32), csrf = randomToken(24);
-  await env.DB.prepare("INSERT INTO console_sessions (sid_hash, sub, email, email_authority, name, idp, csrf, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(await sha256b64url(sid), claims.sub, claims.email || null, claims.email_authority || null, claims.name || claims.preferred_username || null, claims.idp, csrf, now() + SESSION_TTL).run();
+  await env.DB.prepare("INSERT INTO console_sessions (sid_hash, sub, email, email_authority, email_verified, name, idp, csrf, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(await sha256b64url(sid), claims.sub, claims.email || null, claims.email_authority || null, claims.email_verified === true ? 1 : 0, claims.name || claims.preferred_username || null, claims.idp, csrf, now() + SESSION_TTL).run();
   return redirect(safeNext(st.n), { status: 303, cookies: [clear, cookie(SESSION_COOKIE, sid, { maxAge: SESSION_TTL })] });
 }
 
@@ -71,3 +71,8 @@ export async function readPost(request, env, session) {
 }
 
 export const isOperator = (env, session) => !!session && String(env.OPERATOR_SUBS || "").split(/[\s,]+/).filter(Boolean).includes(session.sub);
+
+// The session's email address when an identity provider that is
+// authoritative for its domain asserted it as verified; otherwise null. Only
+// such an address may carry rights tied to an email (invitations).
+export const verifiedEmail = (s) => (s && s.email && s.email_verified === 1 && s.email_authority === "authoritative" ? String(s.email).toLowerCase() : null);

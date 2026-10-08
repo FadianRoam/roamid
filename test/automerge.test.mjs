@@ -82,7 +82,7 @@ test("automerge: changes to an existing application only from its contact.github
 function net({ apps = true, lists = true, txt = {} } = {}) {
   const fetchFn = async (url) => {
     const u = new URL(url);
-    if (u.pathname === "/apps.json") return apps ? Response.json({ apps: [{ client_id: "app-x1", name: { en: "Taken Name" } }], banned_domains: ["bad.example"] }) : new Response("down", { status: 503 });
+    if (u.pathname === "/apps.json") return apps ? Response.json({ apps: [{ client_id: "app-x1", name: { en: "Taken Name" } }], banned_domains: ["bad.example"], saml_entities: [{ client_id: "app-s1", entity_id: "https://wiki.held.example.org/saml" }] }) : new Response("down", { status: 503 });
     if (u.host === "urlhaus.abuse.ch" || u.host === "raw.githubusercontent.com") return lists ? new Response("") : new Response("down", { status: 502 });
     if (u.host === "cloudflare-dns.com") return Response.json({ Status: 0, Answer: [{ type: 1, data: "192.0.2.1" }] });
     return new Response("nf", { status: 404 });
@@ -234,4 +234,19 @@ test("checkThenMerge releases only the check run for its own branch, exact head 
   assert.equal(await checkThenMerge(ok, { branch: "issue-3", sha: H, pr: 5, repo: REPO, sleep: async () => {}, log() {} }), "success");
   assert.deepEqual(calls.filter(([, p]) => /approve/.test(p)).map(([, p]) => p), ["/actions/runs/7/approve"]);
   assert.ok(calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches"));
+});
+
+test("SAML entity IDs: https on the verified domain or a subdomain, unique across the registry and the console", async () => {
+  const { checkApp } = await import("../src/apps/checks.js");
+  const saml = (entity_id, o = {}) => ({ client_id: "wiki", protocol: "saml2", name: { en: "Example Wiki" }, domain: "example.org", homepage: "https://example.org/", entity_id, acs_urls: ["https://wiki.example.org/saml/acs"], status: "active", ...o });
+  const codes = async (e) => (await checkApp(e)).errors.filter((x) => x.field === "entity_id").map((x) => x.code);
+  assert.deepEqual(await codes(saml("https://wiki.example.org/saml")), [], "a subdomain");
+  assert.deepEqual(await codes(saml("https://example.org/saml")), [], "the domain itself");
+  for (const bad of ["https://sso.othercorp.example/saml", "urn:example:wiki", "http://wiki.example.org/saml", "https://example.org.evil.example/saml", "https://user@wiki.example.org/saml", "https://wiki.example.org:8443/saml", "notaurl"]) {
+    assert.deepEqual(await codes(saml(bad)), ["entity_domain"], bad);
+  }
+  // A pull request may not take an entity ID that a console application holds.
+  const n = net({ txt: { "_roamid-app.held.example.org": ["roamid-app=wiki2"] } });
+  const r = await reviewClients([saml("https://wiki.held.example.org/saml", { client_id: "wiki2", domain: "held.example.org", homepage: "https://held.example.org/", acs_urls: ["https://wiki.held.example.org/acs"], contact: { github: "x", email: "a@held.example.org" } })], doc, n);
+  assert.ok(r.results[0].errors.some((e) => e.code === "entity_taken"), JSON.stringify(r.results[0].errors));
 });

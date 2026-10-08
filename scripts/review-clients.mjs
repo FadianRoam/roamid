@@ -57,6 +57,7 @@ export async function reviewClients(entries, doc, { fetchFn = fetch, lookupTxt =
         resolves: (h) => resolvesPublic(h, { fetchFn }),
       });
       errors.push(...r.errors);
+      if (e.protocol === "saml2" && (live.saml_entities || []).some((x) => x.entity_id === e.entity_id && x.client_id !== e.client_id)) errors.push({ code: "entity_taken", field: "entity_id", message: "this entity ID is used by an application in the developer console" });
       // A disabled entry is not offered for sign-in: the domain proof may be skipped.
       if (!errors.length && e.status === "active") {
         const p = await proveAppDomain(e.domain, e.client_id, { lookupTxt, fetchFn });
