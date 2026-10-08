@@ -73,7 +73,7 @@ The interface described in these documents is version 1.
 ## Repository layout
 
 ```
-registry/idps/<id>.json         identity providers
+registry/idps/<id>/idp.json     identity providers (optional logo.png, logo.webp or logo.jpg)
 registry/clients/<client_id>.json  applications
 schema/                         JSON Schemas for both entry types
 src/                            the Cloudflare Worker

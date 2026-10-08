@@ -5,7 +5,8 @@
 登记表即 `registry/` 下的 JSON 文件，公开且不含任何密钥。
 
 ```
-registry/idps/<id>.json            身份提供方   schema/idp.schema.json
+registry/idps/<id>/idp.json        身份提供方   schema/idp.schema.json
+registry/idps/<id>/logo.<ext>      可选标志     png、webp 或 jpg
 registry/clients/<client_id>.json  应用         schema/client.schema.json
 ```
 
@@ -33,8 +34,8 @@ registry/clients/<client_id>.json  应用         schema/client.schema.json
 |---|---|
 | 应用，OpenID Connect | [新建 registry/clients/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/clients?filename=your-app-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fclient.schema.json%22%2C%0A%20%20%22client_id%22%3A%20%22example-portal%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Portal%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E9%97%A8%E6%88%B7%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.com%2F%22%2C%0A%20%20%22domain%22%3A%20%22example.com%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-dev%22%2C%0A%20%20%20%20%22email%22%3A%20%22dev%40example.com%22%0A%20%20%7D%2C%0A%20%20%22redirect_uris%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fportal.example.com%2Fauth%2Fcallback%22%0A%20%20%5D%2C%0A%20%20%22post_logout_redirect_uris%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fportal.example.com%2F%22%0A%20%20%5D%2C%0A%20%20%22token_endpoint_auth_method%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22jwks_uri%22%3A%20%22https%3A%2F%2Fportal.example.com%2F.well-known%2Fjwks.json%22%2C%0A%20%20%22subject_type%22%3A%20%22public%22%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=application.md) |
 | 应用，SAML 2.0 | [新建 registry/clients/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/clients?filename=your-app-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fclient-saml2.schema.json%22%2C%0A%20%20%22client_id%22%3A%20%22example-wiki%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Wiki%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%BB%B4%E5%9F%BA%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fwiki.example.com%2F%22%2C%0A%20%20%22domain%22%3A%20%22example.com%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-dev%22%2C%0A%20%20%20%20%22email%22%3A%20%22dev%40example.com%22%0A%20%20%7D%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fwiki.example.com%2Fsaml%2Fmetadata%22%2C%0A%20%20%22acs_urls%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fwiki.example.com%2Fsaml%2Facs%22%0A%20%20%5D%2C%0A%20%20%22subject_type%22%3A%20%22public%22%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=application.md) |
-| 身份提供方，OpenID Connect | [新建 registry/idps/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fidp.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Community%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%A4%BE%E5%8C%BA%22%0A%20%20%7D%2C%0A%20%20%22issuer%22%3A%20%22https%3A%2F%2Flogin.example.org%2Frealms%2Fmain%22%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.org%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.org%22%0A%20%20%7D%2C%0A%20%20%22client_id%22%3A%20%22roamid%22%2C%0A%20%20%22client_auth%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22scopes%22%3A%20%5B%0A%20%20%20%20%22openid%22%2C%0A%20%20%20%20%22email%22%2C%0A%20%20%20%20%22profile%22%0A%20%20%5D%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.org%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
-| 身份提供方，SAML 2.0 | [新建 registry/idps/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fidp-saml2.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example-saml%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20University%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E5%A4%A7%E5%AD%A6%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.edu%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.edu%22%0A%20%20%7D%2C%0A%20%20%22metadata_url%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22sub_source%22%3A%20%22urn%3Aoasis%3Anames%3Atc%3ASAML%3Aattribute%3Asubject-id%22%2C%0A%20%20%22email_attribute_verified%22%3A%20true%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.edu%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
+| 身份提供方，OpenID Connect | [新建 registry/idps/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id%2Fidp.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2F..%2Fschema%2Fidp.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Community%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%A4%BE%E5%8C%BA%22%0A%20%20%7D%2C%0A%20%20%22issuer%22%3A%20%22https%3A%2F%2Flogin.example.org%2Frealms%2Fmain%22%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.org%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.org%22%0A%20%20%7D%2C%0A%20%20%22client_id%22%3A%20%22roamid%22%2C%0A%20%20%22client_auth%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22scopes%22%3A%20%5B%0A%20%20%20%20%22openid%22%2C%0A%20%20%20%20%22email%22%2C%0A%20%20%20%20%22profile%22%0A%20%20%5D%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.org%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
+| 身份提供方，SAML 2.0 | [新建 registry/idps/… 文件](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id%2Fidp.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2F..%2Fschema%2Fidp-saml2.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example-saml%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20University%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E5%A4%A7%E5%AD%A6%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.edu%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.edu%22%0A%20%20%7D%2C%0A%20%20%22metadata_url%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22sub_source%22%3A%20%22urn%3Aoasis%3Anames%3Atc%3ASAML%3Aattribute%3Asubject-id%22%2C%0A%20%20%22email_attribute_verified%22%3A%20true%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.edu%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
 
 **不用 git：填写表单。** [登记应用](https://github.com/FadianRoam/roamid/issues/new?template=register-application.yml)或[登记身份提供方](https://github.com/FadianRoam/roamid/issues/new?template=register-identity-provider.yml)。机器人把表单转为分支 `issue-<编号>` 上的拉取请求，并在议题中回复后续步骤（要发布的域名证明记录，或要在你的身份提供方处登记的回调地址）。密钥从不经过议题：看起来像密钥的字段会从议题中删除，且不会创建拉取请求。需要客户端密钥时，请使用下面的命令，或选择 `private_key_jwt` 或 `none`。该拉取请求由机器人启动的 `check` 运行检查；应用条目会在 30 分钟内由自动审核处理。
 
@@ -42,7 +43,7 @@ registry/clients/<client_id>.json  应用         schema/client.schema.json
 
 ```
 npm run new:app     # 写入 registry/clients/<client_id>.json
-npm run new:idp     # 写入 registry/idps/<id>.json
+npm run new:idp     # 写入 registry/idps/<id>/idp.json；--logo <文件> 同时加入标志
 ```
 
 命令逐项询问字段、写入文件，打印要发布的 DNS TXT 记录（或 well-known 文件），身份提供方还会打印要登记的回调地址；随后运行与 CI 相同的检查。使用 `client_secret_*` 时，它在你的机器上生成 32 字节密钥，只显示一次，文件中只写入其 SHA-256。
@@ -53,13 +54,27 @@ npm run new:idp     # 写入 registry/idps/<id>.json
 
 | 规则 | |
 |---|---|
-| 文件名 | 等于 `id`（身份提供方）或 `client_id`（应用） |
+| 文件名 | 目录 `registry/idps/<id>/` 等于 `id`；`registry/clients/<client_id>.json` 等于 `client_id` |
 | 标识 | `id`:`[a-z0-9-]{2,32}`;`client_id`:`[a-z0-9-]{2,64}`；唯一 |
 | 永久 | `main` 上的标识永不删除、永不改名：主体标识由它推出。退役用 `"status": "disabled"`。CI 拒绝删除与改名。 |
 | 签发方 | https，不含查询与片段，在身份提供方之间唯一 |
 | 邮箱域名 | 在身份提供方之间唯一（含通配重叠）；每个都要 TXT 证明 |
 | 回调地址 | https，或回环主机上的 http；精确匹配；不含片段与通配符 |
 | 规模 | 至多 500 个身份提供方、5000 个应用 |
+
+## 身份提供方标志
+
+身份提供方可以在条目旁加入一个标志：`registry/idps/<id>/logo.png`、`logo.webp` 或 `logo.jpg`。它显示在 `/idps` 与登录选择页中名称的右侧。没有标志时显示带名称首字母的方块。
+
+| 规则 | |
+|---|---|
+| 格式 | PNG、WebP 或 JPEG；类型按文件内容判断，且须与扩展名一致。不接受 SVG。 |
+| 大小 | 不超过 100 KB |
+| 尺寸 | 每边 64 至 512 像素；宽高比 1:1 至 2:1 |
+| 内容 | 非动画；图像结束后不得有其他数据 |
+| 权利 | 本身份提供方自己的标志，提交者有权使用 |
+
+CI 检查该文件，并在拉取请求摘要中列出所有问题。维护者审核身份提供方条目，拒绝模仿其他组织标志的图像。发布步骤把文件以内容哈希命名放在 `registry.json` 旁，并在条目中描述（`logo`：`path`、`sha256`、`type`、`width`、`height`；不写在 `idp.json` 中）。RoamID 从同一来源下载、再次检查，并在 `https://id.fadianro.am/logos/<id>.<哈希>.<扩展名>` 提供；页面从不从 GitHub 加载。
 
 ## 运行时的条目状态
 

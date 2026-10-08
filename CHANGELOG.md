@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 (2026-10-08)
+
+- Registry layout: an identity provider is a directory, `registry/idps/<id>/idp.json`, with an optional `logo.png`, `logo.webp` or `logo.jpg`. Entries moved from `registry/idps/<id>.json` keep their identifiers; applications stay at `registry/clients/<client_id>.json`.
+- Identity provider logos: checked in CI (type by content, at most 100 KB, 64 to 512 pixels, aspect 1:1 to 2:1, no animation, no trailing data), published next to `registry.json` under a content-hashed name, listed in the entry as `logo`, re-checked by the instance and served from `/logos/`. `/idps.json` lists the logo URL.
+- `npm run new:idp -- --logo <file>`; the identity provider issue form accepts a logo attachment.
+- Operator decisions name their basis: only the reports ticked for a decision are upheld; a published report links the decision it was upheld by; dismissals are not public.
+
 ## 1.1.0 (2026-10-08)
 
 - SAML 2.0 HTTP-Redirect binding: `SAMLRequest`, `SAMLResponse`, `RelayState`, `SigAlg` and `Signature` may appear once each (compared by decoded name); the signed octets and the processed values come from the same occurrence. HTTP-POST fields may appear once each. A signed HTTP-POST `AuthnRequest` is read from the verified copy.

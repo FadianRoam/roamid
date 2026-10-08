@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema/idp-saml2.schema.json",
+  "$schema": "../../../schema/idp-saml2.schema.json",
   "id": "interop-kc",
   "protocol": "saml2",
   "name": {

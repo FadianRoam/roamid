@@ -12,6 +12,7 @@
 // (GitHub job summary).
 import { appendFileSync } from "node:fs";
 import { readTree, readRevision, toDoc, idsOf } from "./lib.mjs";
+import { checkLogo } from "../src/registry/logo.js";
 import { validateRegistry, checkFileNames, checkImmutable, proofName, proofValue } from "../src/registry/validate.js";
 import { discoveryProblems } from "../src/oidc/upstream.js";
 import { parseIdpMetadata } from "../src/saml/build.js";
@@ -29,6 +30,10 @@ const errors = [];
 const report = [];
 const files = readTree();
 errors.push(...checkFileNames(files));
+for (const f of files.filter((x) => x.kind === "logo")) {
+  const c = checkLogo(f.bytes, f.ext);
+  if (!c.errors.length) report.push(`- ${f.id}: logo ${f.path}, ${c.type}, ${c.width}×${c.height}, ${(f.bytes.length / 1024).toFixed(1)} KB (maintainer: check that it is the provider's own mark)`);
+}
 const head = toDoc(files);
 const { idps, clients, dropped } = validateRegistry(head, { strict: true });
 for (const d of dropped) errors.push(`${d.kind} ${d.id}: ${d.errors.join("; ")}`);

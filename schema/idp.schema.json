@@ -159,6 +159,46 @@
       "maxLength": 300,
       "description": "Optional plain-text note shown with the entry on /idps and /apps, for example why it is disabled."
     },
+    "logo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "type",
+        "width",
+        "height"
+      ],
+      "description": "Set by the publish step from registry/idps/<id>/logo.<ext>; not written in idp.json.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{2,32}\\.[0-9a-f]{8}\\.(png|webp|jpg)$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "image/png",
+            "image/webp",
+            "image/jpeg"
+          ]
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 512
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 512
+        }
+      }
+    },
     "status": {
       "type": "string",
       "enum": [

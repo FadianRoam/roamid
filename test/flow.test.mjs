@@ -276,3 +276,38 @@ test("admin sync needs the token", async () => {
   assert.equal(ok.status, 200);
   assert.equal((await ok.json()).commit, "a".repeat(40));
 });
+
+test("logos: the sync downloads, re-checks and serves them with fixed headers; a tampered file is dropped", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const png = readFileSync(new URL("./fixtures/logos/valid.png", import.meta.url));
+  const sha = createHash("sha256").update(png).digest("hex");
+  const h = await setup({ idps: { good: "idp.example.test", other: "idp2.example.test" } });
+  const path = `good.${sha.slice(0, 8)}.png`;
+  h.registry.idps[0].logo = { path, sha256: sha, type: "image/png", width: 128, height: 128 };
+  h.files[`/${path}`] = png;
+  // "other" names a logo whose bytes do not match (a different file at that path).
+  const webp = readFileSync(new URL("./fixtures/logos/valid.webp", import.meta.url));
+  const opath = `other.${sha.slice(0, 8)}.png`;
+  h.registry.idps[1].logo = { path: opath, sha256: sha, type: "image/png", width: 128, height: 128 };
+  h.files[`/${opath}`] = webp;
+  await h.request("/admin/sync", { method: "POST", headers: { Authorization: "Bearer admin-token-0123456789" } });
+  const r = await h.request(`/logos/${path}`);
+  assert.equal(r.status, 200);
+  assert.deepEqual(Buffer.from(await r.arrayBuffer()), png);
+  assert.equal(r.headers.get("content-type"), "image/png");
+  assert.equal(r.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(r.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal(r.headers.get("content-security-policy"), "default-src 'none'");
+  assert.equal(r.headers.get("content-disposition"), "inline");
+  const bad = await h.request(`/logos/${opath}`);
+  assert.equal(bad.status, 404, "a logo whose bytes do not match registry.json is not stored");
+  assert.equal(bad.headers.get("x-content-type-options"), "nosniff");
+  assert.equal((await h.request("/logos/../registry.json")).status, 404);
+  const idps = await (await h.request("/idps.json")).json().catch(() => null);
+  if (idps) {
+    const list = idps.idps || idps;
+    assert.ok(list.find((i) => i.id === "good").logo, "the verified logo stays in the entry");
+    assert.ok(!list.find((i) => i.id === "other").logo, "the refused logo is dropped from the entry");
+  }
+});

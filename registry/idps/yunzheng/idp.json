@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema/idp.schema.json",
+  "$schema": "../../../schema/idp.schema.json",
   "id": "yunzheng",
   "protocol": "oidc",
   "name": { "en": "YunZheng Auth" },

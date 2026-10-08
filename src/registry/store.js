@@ -6,6 +6,7 @@
 // D1 as the last good copy. A fetch or parse failure keeps the previous copy.
 // When D1 has no copy yet, the first request syncs.
 
+import { checkLogo } from "./logo.js";
 import { validateRegistry, LIMITS } from "./validate.js";
 import { now } from "../lib/http.js";
 
@@ -94,6 +95,7 @@ export async function syncRegistry(env, { url = env.REGISTRY_URL } = {}) {
     return { ok: false, error, dropped };
   }
   for (const d of dropped) console.warn("[registry] dropped", d.kind, d.id, d.errors.join("; "));
+  await syncLogos(env, url, idps);
   await env.DB.prepare(
     `INSERT INTO registry_cache (id, commit_sha, generated_at, synced_at, checked_at, doc, dropped, last_error)
      VALUES (1, ?, ?, ?, ?, ?, ?, NULL)
@@ -102,4 +104,49 @@ export async function syncRegistry(env, { url = env.REGISTRY_URL } = {}) {
   ).bind(doc.commit, String(doc.generated_at || ""), t, t, JSON.stringify({ idps, clients }), JSON.stringify(dropped)).run();
   memo = null;
   return { ok: true, commit: doc.commit, idps: idps.length, clients: clients.length, dropped };
+}
+
+// Logos named in registry.json: downloaded once per content hash from the
+// registry's own origin and re-checked here; an entry whose logo cannot be
+// verified is shown without it (monogram).
+async function syncLogos(env, registryUrl, idps) {
+  const want = new Set();
+  for (const i of idps) {
+    if (!i.logo) continue;
+    const l = i.logo;
+    try {
+      const have = await env.DB.prepare("SELECT sha256 FROM idp_logos WHERE path = ?").bind(l.path).first();
+      if (!have) {
+        const r = await fetch(new URL(l.path, registryUrl).href, { signal: AbortSignal.timeout(10000), cf: { cacheTtl: 0 } });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        const c = checkLogo(bytes, l.path.split(".").pop());
+        if (c.errors.length) throw new Error(c.errors.join("; "));
+        if (c.type !== l.type || c.width !== l.width || c.height !== l.height) throw new Error("type or dimensions differ from registry.json");
+        const sum = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((x) => x.toString(16).padStart(2, "0")).join("");
+        if (sum !== l.sha256) throw new Error("sha256 differs from registry.json");
+        let bin = ""; for (let k = 0; k < bytes.length; k += 0x8000) bin += String.fromCharCode(...bytes.subarray(k, k + 0x8000));
+        await env.DB.prepare("INSERT INTO idp_logos (path, idp, type, sha256, width, height, data, stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO NOTHING")
+          .bind(l.path, i.id, c.type, sum, c.width, c.height, btoa(bin), now()).run();
+      } else if (have.sha256 !== l.sha256) throw new Error("stored sha256 differs");
+      want.add(l.path);
+    } catch (e) {
+      console.warn("[registry] logo refused", i.id, String(e && e.message || e).slice(0, 200));
+      delete i.logo;
+    }
+  }
+  try {
+    const { results } = await env.DB.prepare("SELECT path FROM idp_logos").all();
+    for (const r of results || []) if (!want.has(r.path)) await env.DB.prepare("DELETE FROM idp_logos WHERE path = ?").bind(r.path).run();
+  } catch { /* table missing before the migration */ }
+}
+
+// GET /logos/<id>.<sha8>.<ext>
+export async function serveLogo(env, path) {
+  const m = /^\/logos\/([a-z0-9-]{2,32}\.[0-9a-f]{8}\.(?:png|webp|jpg))$/.exec(path);
+  const base = { "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'" };
+  const row = m ? await env.DB.prepare("SELECT type, data FROM idp_logos WHERE path = ?").bind(m[1]).first() : null;
+  if (!row) return new Response("not found", { status: 404, headers: { ...base, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  const bytes = Uint8Array.from(atob(row.data), (c) => c.charCodeAt(0));
+  return new Response(bytes, { headers: { ...base, "Content-Type": row.type, "Cache-Control": "public, max-age=31536000, immutable", "Content-Disposition": "inline", "Content-Length": String(bytes.length) } });
 }

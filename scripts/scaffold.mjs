@@ -66,7 +66,7 @@ export function clientInstructions(e) {
 export function buildIdp(f) {
   const protocol = f.protocol === "saml2" ? "saml2" : "oidc";
   const e = {
-    $schema: protocol === "saml2" ? "../../schema/idp-saml2.schema.json" : "../../schema/idp.schema.json",
+    $schema: protocol === "saml2" ? "../../../schema/idp-saml2.schema.json" : "../../../schema/idp.schema.json",
     id: lower(f.id, 32), protocol,
     name: { en: str(f.name_en, 80), ...(str(f.name_zh) ? { zh: str(f.name_zh, 80) } : {}) },
   };
@@ -92,7 +92,7 @@ export function buildIdp(f) {
 }
 
 export function idpInstructions(e) {
-  const out = [`File: registry/idps/${e.id}.json`];
+  const out = [`File: registry/idps/${e.id}/idp.json (optional logo: registry/idps/${e.id}/logo.png, .webp or .jpg)`];
   if (e.protocol === "saml2") {
     out.push(`Service provider metadata to load at your IdP: ${BASE_URL}/saml/sp/metadata.xml?idp=${e.id}`, `ACS URL: ${BASE_URL}/saml/acs/${e.id}`);
   } else {
@@ -132,6 +132,7 @@ const CERT_FIELDS = new Set(["sign_cert", "certs"]);
 export function findSecrets(fields) {
   const hits = [];
   for (const [k, v] of Object.entries(fields)) {
+    if (k === "logo" || k === "logo_rights") continue;
     if (SECRET_RE.test(v)) { hits.push(k); continue; }
     if (CERT_FIELDS.has(k) || k === "client_secret_sha256") continue;
     const plain = String(v).replace(/https?:\/\/\S+/g, "");

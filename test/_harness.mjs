@@ -94,7 +94,7 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
   const client = await genKey("RS256", "cli-test");
   const rpKey = await genKey("ES256", "rp-1");
   const h = {
-    db, rpKey, rpSigner: await importPrivate(rpKey), txt, idps: {}, net: [],
+    db, rpKey, rpSigner: await importPrivate(rpKey), txt, idps: {}, net: [], files: {},
     env: { DB: db, BASE_URL: BASE, REGISTRY_URL, SIGNING_KEYS: JSON.stringify([signing]), CLIENT_KEYS: JSON.stringify([client]),
       SAML_KEYS, ADMIN_TOKEN: "admin-token-0123456789", IDP_SECRET_GOOD: "upstream-secret", IDP_SECRET_EVIL: "upstream-secret", IDP_SECRET_OFF: "upstream-secret" },
   };
@@ -110,6 +110,7 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
     const u = new URL(req.url);
     h.net.push(u.host + u.pathname);
     if (u.href.startsWith(REGISTRY_URL)) return Response.json(h.registry);
+    if (u.host === "registry.example.test" && h.files[u.pathname]) return new Response(h.files[u.pathname]);
     if (u.host === "cloudflare-dns.com" || u.host === "dns.google") {
       const name = u.searchParams.get("name");
       const type = u.searchParams.get("type");

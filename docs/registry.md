@@ -5,7 +5,8 @@
 The registry is the set of JSON files in `registry/`. It is public and contains no secrets.
 
 ```
-registry/idps/<id>.json            identity providers   schema/idp.schema.json
+registry/idps/<id>/idp.json        identity providers   schema/idp.schema.json
+registry/idps/<id>/logo.<ext>      optional logo        png, webp or jpg
 registry/clients/<client_id>.json  applications         schema/client.schema.json
 ```
 
@@ -33,8 +34,8 @@ The developer console needs a sign-in through one of the listed identity provide
 |---|---|
 | Application, OpenID Connect | [new registry/clients/… file](https://github.com/FadianRoam/roamid/new/main/registry/clients?filename=your-app-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fclient.schema.json%22%2C%0A%20%20%22client_id%22%3A%20%22example-portal%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Portal%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E9%97%A8%E6%88%B7%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.com%2F%22%2C%0A%20%20%22domain%22%3A%20%22example.com%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-dev%22%2C%0A%20%20%20%20%22email%22%3A%20%22dev%40example.com%22%0A%20%20%7D%2C%0A%20%20%22redirect_uris%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fportal.example.com%2Fauth%2Fcallback%22%0A%20%20%5D%2C%0A%20%20%22post_logout_redirect_uris%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fportal.example.com%2F%22%0A%20%20%5D%2C%0A%20%20%22token_endpoint_auth_method%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22jwks_uri%22%3A%20%22https%3A%2F%2Fportal.example.com%2F.well-known%2Fjwks.json%22%2C%0A%20%20%22subject_type%22%3A%20%22public%22%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=application.md) |
 | Application, SAML 2.0 | [new registry/clients/… file](https://github.com/FadianRoam/roamid/new/main/registry/clients?filename=your-app-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fclient-saml2.schema.json%22%2C%0A%20%20%22client_id%22%3A%20%22example-wiki%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Wiki%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%BB%B4%E5%9F%BA%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fwiki.example.com%2F%22%2C%0A%20%20%22domain%22%3A%20%22example.com%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-dev%22%2C%0A%20%20%20%20%22email%22%3A%20%22dev%40example.com%22%0A%20%20%7D%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fwiki.example.com%2Fsaml%2Fmetadata%22%2C%0A%20%20%22acs_urls%22%3A%20%5B%0A%20%20%20%20%22https%3A%2F%2Fwiki.example.com%2Fsaml%2Facs%22%0A%20%20%5D%2C%0A%20%20%22subject_type%22%3A%20%22public%22%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=application.md) |
-| Identity provider, OpenID Connect | [new registry/idps/… file](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fidp.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Community%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%A4%BE%E5%8C%BA%22%0A%20%20%7D%2C%0A%20%20%22issuer%22%3A%20%22https%3A%2F%2Flogin.example.org%2Frealms%2Fmain%22%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.org%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.org%22%0A%20%20%7D%2C%0A%20%20%22client_id%22%3A%20%22roamid%22%2C%0A%20%20%22client_auth%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22scopes%22%3A%20%5B%0A%20%20%20%20%22openid%22%2C%0A%20%20%20%20%22email%22%2C%0A%20%20%20%20%22profile%22%0A%20%20%5D%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.org%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
-| Identity provider, SAML 2.0 | [new registry/idps/… file](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2Fschema%2Fidp-saml2.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example-saml%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20University%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E5%A4%A7%E5%AD%A6%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.edu%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.edu%22%0A%20%20%7D%2C%0A%20%20%22metadata_url%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22sub_source%22%3A%20%22urn%3Aoasis%3Anames%3Atc%3ASAML%3Aattribute%3Asubject-id%22%2C%0A%20%20%22email_attribute_verified%22%3A%20true%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.edu%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
+| Identity provider, OpenID Connect | [new registry/idps/… file](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id%2Fidp.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2F..%2Fschema%2Fidp.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example%22%2C%0A%20%20%22protocol%22%3A%20%22oidc%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20Community%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E7%A4%BE%E5%8C%BA%22%0A%20%20%7D%2C%0A%20%20%22issuer%22%3A%20%22https%3A%2F%2Flogin.example.org%2Frealms%2Fmain%22%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.org%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.org%22%0A%20%20%7D%2C%0A%20%20%22client_id%22%3A%20%22roamid%22%2C%0A%20%20%22client_auth%22%3A%20%22private_key_jwt%22%2C%0A%20%20%22scopes%22%3A%20%5B%0A%20%20%20%20%22openid%22%2C%0A%20%20%20%20%22email%22%2C%0A%20%20%20%20%22profile%22%0A%20%20%5D%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.org%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
+| Identity provider, SAML 2.0 | [new registry/idps/… file](https://github.com/FadianRoam/roamid/new/main/registry/idps?filename=your-idp-id%2Fidp.json&value=%7B%0A%20%20%22%24schema%22%3A%20%22..%2F..%2F..%2Fschema%2Fidp-saml2.schema.json%22%2C%0A%20%20%22id%22%3A%20%22example-saml%22%2C%0A%20%20%22protocol%22%3A%20%22saml2%22%2C%0A%20%20%22name%22%3A%20%7B%0A%20%20%20%20%22en%22%3A%20%22Example%20University%22%2C%0A%20%20%20%20%22zh%22%3A%20%22%E7%A4%BA%E4%BE%8B%E5%A4%A7%E5%AD%A6%22%0A%20%20%7D%2C%0A%20%20%22homepage%22%3A%20%22https%3A%2F%2Fexample.edu%2F%22%2C%0A%20%20%22contact%22%3A%20%7B%0A%20%20%20%20%22github%22%3A%20%22example-admin%22%2C%0A%20%20%20%20%22email%22%3A%20%22admin%40example.edu%22%0A%20%20%7D%2C%0A%20%20%22metadata_url%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22entity_id%22%3A%20%22https%3A%2F%2Fidp.example.edu%2Fidp%2Fshibboleth%22%2C%0A%20%20%22sub_source%22%3A%20%22urn%3Aoasis%3Anames%3Atc%3ASAML%3Aattribute%3Asubject-id%22%2C%0A%20%20%22email_attribute_verified%22%3A%20true%2C%0A%20%20%22email_domains%22%3A%20%5B%0A%20%20%20%20%22example.edu%22%0A%20%20%5D%2C%0A%20%20%22status%22%3A%20%22active%22%0A%7D%0A&quick_pull=1&template=identity-provider.md) |
 
 **Without git: a form.** [Register an application](https://github.com/FadianRoam/roamid/issues/new?template=register-application.yml) or [register an identity provider](https://github.com/FadianRoam/roamid/issues/new?template=register-identity-provider.yml). A bot turns the form into a pull request on a branch `issue-<number>` and comments with the next steps (the domain proof record, or the redirect URI to register at your provider). Secrets never go through issues: a field that looks like one is removed from the issue and nothing is opened. For a client secret, use the command below, or choose `private_key_jwt` or `none`. The pull request is checked by a `check` run started by the bot; for an application, the automatic review picks it up within 30 minutes.
 
@@ -42,7 +43,7 @@ The developer console needs a sign-in through one of the listed identity provide
 
 ```
 npm run new:app     # writes registry/clients/<client_id>.json
-npm run new:idp     # writes registry/idps/<id>.json
+npm run new:idp     # writes registry/idps/<id>/idp.json; --logo <file> adds the logo
 ```
 
 It asks for the fields, writes the file, prints the DNS TXT record (or the well-known file) to publish and, for an identity provider, the redirect URI to register; then it runs the same checks as CI. With `client_secret_*` it generates a 32-byte secret on your machine, shows it once and writes only its SHA-256.
@@ -53,13 +54,27 @@ Copy-ready examples: [examples/](../examples/) (`app-oidc.json`, `app-saml2.json
 
 | Rule | |
 |---|---|
-| File name | equals `id` (identity providers) or `client_id` (applications) |
+| File name | the directory `registry/idps/<id>/` equals `id`; `registry/clients/<client_id>.json` equals `client_id` |
 | Identifiers | `id`: `[a-z0-9-]{2,32}`; `client_id`: `[a-z0-9-]{2,64}`; unique |
 | Permanent | An identifier on `main` is never removed or renamed: subjects are derived from it. Retire with `"status": "disabled"`. CI refuses deletes and renames. |
 | Issuer | https, no query or fragment, unique across identity providers |
 | Email domains | unique across identity providers, including overlap by wildcard; each proven by TXT |
 | Redirect URIs | https, or http on a loopback host; exact; no fragment or wildcard |
 | Size | at most 500 identity providers and 5000 applications |
+
+## Identity provider logos
+
+An identity provider may add one logo next to its entry: `registry/idps/<id>/logo.png`, `logo.webp` or `logo.jpg`. It is shown on `/idps` and in the sign-in picker, to the right of the name. Without a logo, a tile with the first letter of the name is shown.
+
+| Rule | |
+|---|---|
+| Format | PNG, WebP or JPEG; the type is read from the file content and must match the extension. SVG is not accepted. |
+| Size | at most 100 KB |
+| Dimensions | 64 to 512 pixels per side; aspect ratio 1:1 to 2:1 |
+| Content | not animated; no data after the end of the image |
+| Rights | the provider's own mark, which the person submitting it has the right to use |
+
+CI checks the file and reports every problem in the pull request summary. Maintainers review identity provider entries and refuse logos that imitate the marks of other organisations. The publish step adds the file next to `registry.json` under a content-hashed name and describes it in the entry (`logo`: `path`, `sha256`, `type`, `width`, `height`; not written in `idp.json`). RoamID downloads it from the same origin, checks it again and serves it from `https://id.fadianro.am/logos/<id>.<hash>.<ext>`; pages never load it from GitHub.
 
 ## Entry status at run time
 

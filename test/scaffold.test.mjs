@@ -130,6 +130,41 @@ test("issue -> identity provider: PR for human review with the redirect URI and 
   assert.match(c[2].body, /_roamid\.example\.org/);
 });
 
+test("issue -> identity provider with a logo attachment: checked like CI, committed as logo.<ext>; problems become comments", async () => {
+  const { readFileSync } = await import("node:fs");
+  const fx = (f) => new Uint8Array(readFileSync(new URL(`./fixtures/logos/${f}`, import.meta.url)));
+  const URL1 = "https://github.com/user-attachments/assets/0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
+  const body = (logo, rights = "- [X] The logo is the provider's own mark; I have the right to use it.") => Object.entries({ "id": "logo-idp", "Name (English) / 名称（英文）": "Logo IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Contact email / 联系邮箱": "ops@example.org", "Logo (optional) / 标志（可选）": logo, "Logo rights / 标志使用权": rights }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
+  const labels = [{ name: "registration" }, { name: "identity-provider" }];
+  const puts = (g) => g.calls.filter(([m, p]) => m === "PUT" && p.startsWith("/contents/")).map(([, p]) => p);
+  const comments = (g) => g.calls.filter(([m, p]) => m === "POST" && p === "/issues/9/comments").map((c) => c[2].body).join("\n");
+  let g = ghMock();
+  let r = await handleIssue(issue(body(`![logo](${URL1})`), { labels }), { api: g.api, repo: "FadianRoam/roamid", log() {}, fetchLogo: async (u) => { assert.equal(u, URL1); return fx("valid.webp"); } });
+  assert.equal(r.action, "opened");
+  assert.deepEqual(puts(g), ["/contents/registry/idps/logo-idp/idp.json", "/contents/registry/idps/logo-idp/logo.webp"]);
+  // An animated or SVG file: a comment, no logo, the entry still goes ahead.
+  for (const bad of [fx("anim.webp"), new TextEncoder().encode("<svg/>")]) {
+    g = ghMock();
+    r = await handleIssue(issue(body(`![logo](${URL1})`), { labels }), { api: g.api, repo: "FadianRoam/roamid", log() {}, fetchLogo: async () => bad });
+    assert.equal(r.action, "opened");
+    assert.deepEqual(puts(g), ["/contents/registry/idps/logo-idp/idp.json"]);
+    assert.match(comments(g), /The logo was not added/);
+  }
+  // A download failure does not crash the bot.
+  g = ghMock();
+  r = await handleIssue(issue(body(`![logo](${URL1})`), { labels }), { api: g.api, repo: "FadianRoam/roamid", log() {}, fetchLogo: async () => { throw new Error("HTTP 404"); } });
+  assert.equal(r.action, "opened");
+  assert.match(comments(g), /could not be downloaded/);
+  // Rights not ticked, or a link to another host: nothing downloaded.
+  for (const [logo, rights] of [[`![logo](${URL1})`, "- [ ] The logo is the provider's own mark; I have the right to use it."], ["![x](https://evil.example/logo.png)", undefined]]) {
+    g = ghMock();
+    let fetched = false;
+    await handleIssue(issue(body(logo, rights), { labels }), { api: g.api, repo: "FadianRoam/roamid", log() {}, fetchLogo: async () => { fetched = true; return fx("valid.png"); } });
+    assert.equal(fetched, false);
+    assert.deepEqual(puts(g), ["/contents/registry/idps/logo-idp/idp.json"]);
+  }
+});
+
 test("issue -> branch only when the workflow token may not open pull requests", async () => {
   const g = ghMock();
   const api = async (path, opt = {}) => { if (path === "/pulls" && opt.method === "POST") throw new Error("POST /pulls: HTTP 403 not permitted"); return g.api(path, opt); };

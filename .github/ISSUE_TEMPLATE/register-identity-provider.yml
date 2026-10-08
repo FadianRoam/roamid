@@ -47,3 +47,10 @@ body:
   - type: input
     attributes: { label: "Contact email / 联系邮箱" }
     validations: { required: true }
+  - type: textarea
+    attributes: { label: "Logo (optional) / 标志（可选）", description: "Attach one PNG, WebP or JPEG: 64 to 512 pixels per side, aspect 1:1 to 2:1, at most 100 KB, not animated. No SVG. / 附加一个 PNG、WebP 或 JPEG：每边 64 至 512 像素，宽高比 1:1 至 2:1，不超过 100 KB，非动画。不接受 SVG。" }
+  - type: checkboxes
+    attributes:
+      label: "Logo rights / 标志使用权"
+      options:
+        - label: "The logo is the provider's own mark; I have the right to use it. / 该标志是本身份提供方自己的标志，我有权使用。"

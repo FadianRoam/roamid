@@ -34,6 +34,8 @@ export const IDP_FORM = {
   "Released email addresses are verified (SAML) / 发出的邮箱地址已验证": "email_attribute_verified",
   "Email domains / 邮箱域名": "email_domains",
   "Contact email / 联系邮箱": "email",
+  "Logo (optional) / 标志（可选）": "logo",
+  "Logo rights / 标志使用权": "logo_rights",
 };
 export const labelsOf = (form) => Object.fromEntries(Object.entries(form).map(([l, k]) => [k, l]));
 export const APPEAL_FORM = {

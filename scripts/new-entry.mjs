@@ -1,17 +1,30 @@
 #!/usr/bin/env node
 // Write a registry entry by answering questions, then run the same checks as CI.
 //   npm run new:app      registry/clients/<client_id>.json
-//   npm run new:idp      registry/idps/<id>.json
+//   npm run new:idp      registry/idps/<id>/idp.json  [--logo <file>]
 // Offline: for a client secret, a 32-byte secret is generated here, printed
 // once, and only its SHA-256 is written.
 import { createInterface } from "node:readline/promises";
 import { randomBytes, createHash } from "node:crypto";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import { checkLogo } from "../src/registry/logo.js";
 import { execFileSync } from "node:child_process";
 import { buildClient, clientInstructions, buildIdp, idpInstructions } from "./scaffold.mjs";
 
 const kind = process.argv[2];
-if (kind !== "app" && kind !== "idp") { console.error("usage: node scripts/new-entry.mjs app|idp"); process.exit(2); }
+if (kind !== "app" && kind !== "idp") { console.error("usage: node scripts/new-entry.mjs app|idp [--logo <file>]"); process.exit(2); }
+// --logo <file> (identity providers): checked like CI before anything is written.
+const li = process.argv.indexOf("--logo");
+let logo = null;
+if (li > 0) {
+  if (kind !== "idp") { console.error("--logo is for identity providers"); process.exit(2); }
+  const file = process.argv[li + 1];
+  const bytes = readFileSync(file);
+  const ext = (/\.([a-z]+)$/i.exec(file) || [])[1]?.toLowerCase().replace("jpeg", "jpg") || null;
+  const c = checkLogo(bytes, ext);
+  if (c.errors.length) { console.error(`Logo refused:\n  - ${c.errors.join("\n  - ")}`); process.exit(1); }
+  logo = { bytes, ext: c.ext };
+}
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const ask = async (q, def = "") => (await rl.question(`${q}${def ? ` [${def}]` : ""}: `)).trim() || def;
 const f = {};
@@ -64,9 +77,11 @@ if (kind === "app" && /^client_secret_/.test(f.auth || "")) {
 }
 const { entry, errors } = kind === "app" ? buildClient(f) : buildIdp(f);
 if (errors.length) { console.error(`\nNot written:\n  - ${errors.join("\n  - ")}`); process.exit(1); }
-const path = kind === "app" ? `registry/clients/${entry.client_id}.json` : `registry/idps/${entry.id}.json`;
+const path = kind === "app" ? `registry/clients/${entry.client_id}.json` : `registry/idps/${entry.id}/idp.json`;
 if (existsSync(path)) { console.error(`${path} exists; identifiers are permanent. Edit the file instead.`); process.exit(1); }
+if (kind === "idp") mkdirSync(`registry/idps/${entry.id}`, { recursive: true });
 writeFileSync(path, JSON.stringify(entry, null, 2) + "\n");
+if (logo) { writeFileSync(`registry/idps/${entry.id}/logo.${logo.ext}`, logo.bytes); console.log(`Wrote registry/idps/${entry.id}/logo.${logo.ext}`); }
 console.log(`\nWrote ${path}\n`);
 if (secret) console.log(`Client secret (shown once, store it now; only its SHA-256 is in the file):\n\n  ${secret}\n`);
 console.log((kind === "app" ? clientInstructions(entry) : idpInstructions(entry)).join("\n"));

@@ -137,3 +137,11 @@ test("automerge: a pull_request run held for approval is not a verdict; the disp
   await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
   assert.equal(merges(g.calls), 0, "only a held run: nothing ran, nothing merged");
 });
+
+test("automerge: an identity provider directory (idp.json or logo) is never merged automatically", async () => {
+  for (const filename of ["registry/idps/new-idp/idp.json", "registry/idps/yunzheng/logo.png"]) {
+    const g = gh({ files: [{ filename, content: { id: "new-idp" } }] });
+    await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+    assert.equal(merges(g.calls), 0, filename);
+  }
+});

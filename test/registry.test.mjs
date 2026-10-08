@@ -53,11 +53,59 @@ test("a domain claimed by two IdPs is refused", () => {
   assert.equal(ok.dropped.length, 0, "a domain and a subdomain are different domains");
 });
 
-test("file names must equal the identifier", () => {
-  assert.deepEqual(checkFileNames([{ path: "registry/idps/one.json", json: idp("one") }]), []);
-  assert.equal(checkFileNames([{ path: "registry/idps/uno.json", json: idp("one") }]).length, 1);
-  assert.equal(checkFileNames([{ path: "registry/other/one.json", json: idp("one") }]).length, 1);
-  assert.equal(checkFileNames([{ path: "registry/clients/app.json", json: null }]).length, 1);
+test("layout: registry/idps/<id>/idp.json; the directory name equals the id; logo is not written by hand", async () => {
+  const { fileRecord: r } = await import("../scripts/lib.mjs");
+  assert.deepEqual(checkFileNames([r("registry/idps/one/idp.json", idp("one"))]), []);
+  assert.match(checkFileNames([r("registry/idps/one.json", idp("one"))])[0], /registry\/idps\/<id>\/idp\.json/, "the earlier flat layout is refused on the head");
+  assert.equal(checkFileNames([r("registry/idps/uno/idp.json", idp("one"))]).length, 1);
+  assert.equal(checkFileNames([r("registry/other/one.json", idp("one"))]).length, 1);
+  assert.equal(checkFileNames([r("registry/idps/one/notes.txt", new Uint8Array([1]))]).length, 1);
+  assert.equal(checkFileNames([r("registry/clients/app.json", null)]).length, 1);
+  assert.match(checkFileNames([r("registry/idps/one/idp.json", { ...idp("one"), logo: { path: "x" } })])[0], /set by the publish step/);
+});
+
+test("layout migration keeps identifiers; a real rename or delete is still refused", async () => {
+  const { fileRecord: r, idsOf } = await import("../scripts/lib.mjs");
+  const base = [r("registry/idps/one.json", idp("one")), r("registry/idps/two.json", idp("two")), r("registry/clients/app.json", {})];
+  const moved = [r("registry/idps/one/idp.json", idp("one")), r("registry/idps/two/idp.json", idp("two")), r("registry/clients/app.json", {})];
+  assert.deepEqual(checkImmutable(idsOf(base), idsOf(moved)), []);
+  const renamed = [r("registry/idps/one/idp.json", idp("one")), r("registry/idps/deux/idp.json", idp("deux")), r("registry/clients/app.json", {})];
+  assert.match(checkImmutable(idsOf(base), idsOf(renamed)).join(), /"two" was removed or renamed/);
+  assert.match(checkImmutable(idsOf(moved), idsOf(moved.slice(1))).join(), /"one" was removed or renamed/);
+});
+
+test("logo validator: type by magic bytes, size, dimensions, animation, trailing data", async () => {
+  const { checkLogo } = await import("../src/registry/logo.js");
+  const { fileRecord: r } = await import("../scripts/lib.mjs");
+  const { readFileSync } = await import("node:fs");
+  const fx = (f) => new Uint8Array(readFileSync(new URL(`./fixtures/logos/${f}`, import.meta.url)));
+  for (const [f, ext, w, h] of [["valid.png", "png", 128, 128], ["valid.webp", "webp", 128, 128], ["valid.jpg", "jpg", 160, 96]]) {
+    const c = checkLogo(fx(f), ext);
+    assert.deepEqual([c.errors, c.width, c.height], [[], w, h], f);
+  }
+  const png = fx("valid.png");
+  assert.match(checkLogo(png, "jpg").errors.join(), /PNG but named \.jpg/, "a PNG named .jpg");
+  assert.match(checkLogo(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), "png").errors.join(), /not a PNG, WebP or JPEG/, "SVG");
+  // A valid PNG made larger than 100 KB with an extra chunk before IEND.
+  const big = new Uint8Array(png.length + 12 + 110 * 1024);
+  big.set(png.subarray(0, png.length - 12));
+  const at = png.length - 12, len = 110 * 1024;
+  new DataView(big.buffer).setUint32(at, len); big.set(new TextEncoder().encode("tEXt"), at + 4);
+  big.set(png.subarray(png.length - 12), at + 12 + len);
+  assert.deepEqual(checkLogo(big, "png").errors.map((e) => /at most 100 KB/.test(e)), [true], "oversize, otherwise valid");
+  assert.match(checkLogo(fx("anim.webp"), "webp").errors.join(), /animated WebP/);
+  assert.match(checkLogo(fx("anim.png"), "png").errors.join(), /APNG/);
+  for (const f of ["valid.png", "valid.webp", "valid.jpg"]) {
+    const v = fx(f), t = new Uint8Array(v.length + 20); t.set(v); t.set(new TextEncoder().encode("<script>x</script>.."), v.length);
+    assert.ok(checkLogo(t, f.split(".")[1]).errors.some((e) => /after the|RIFF size/.test(e)), `trailing data after ${f}`);
+  }
+  assert.match(checkLogo(fx("small.png"), "png").errors.join(), /32×32/, "too small");
+  // In CI: an SVG file and a mismatched extension are refused with the path.
+  const errs = checkFileNames([r("registry/idps/one/idp.json", idp("one")), r("registry/idps/one/logo.svg", new TextEncoder().encode("<svg/>"))]);
+  assert.match(errs.join(), /logo\.png, logo\.webp or logo\.jpg/);
+  assert.match(checkFileNames([r("registry/idps/one/idp.json", idp("one")), r("registry/idps/one/logo.jpg", png)]).join(), /registry\/idps\/one\/logo\.jpg: logo: the file is PNG/);
+  assert.deepEqual(checkFileNames([r("registry/idps/one/idp.json", idp("one")), r("registry/idps/one/logo.png", png)]), []);
+  assert.match(checkFileNames([r("registry/idps/one/idp.json", idp("one")), r("registry/idps/one/logo.png", png), r("registry/idps/one/logo.webp", fx("valid.webp"))]).join(), /at most one logo/);
 });
 
 test("identifiers are permanent: delete and rename are refused", () => {

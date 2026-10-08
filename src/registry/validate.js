@@ -8,6 +8,7 @@
 //   checkFileNames(files)       -> [errors]                     CI only
 //   checkImmutable(base, head)  -> [errors]                     CI only
 
+import { checkLogo } from "./logo.js";
 import idpSchema from "../../schema/idp.schema.json" with { type: "json" };
 import idpSamlSchema from "../../schema/idp-saml2.schema.json" with { type: "json" };
 import clientSchema from "../../schema/client.schema.json" with { type: "json" };
@@ -91,11 +92,20 @@ export function redirectUriErrors(s, field) {
   return e;
 }
 
+// The logo object written by the publish step (registry.json).
+function logoErrors(entry) {
+  const l = entry.logo;
+  if (!l) return [];
+  const ext = { "image/png": "png", "image/webp": "webp", "image/jpeg": "jpg" }[l.type];
+  return l.path === `${entry.id}.${l.sha256.slice(0, 8)}.${ext}` ? [] : ["logo.path: must be <id>.<first 8 hex of sha256>.<ext of type>"];
+}
+
 export function validateIdp(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return ["entry: must be an object"];
   if (entry.protocol === "saml2") return validateSamlIdp(entry);
   const errs = checkSchema(idpSchema, entry);
   if (errs.length) return errs;
+  errs.push(...logoErrors(entry));
   errs.push(...httpsUrl(entry.issuer, "issuer"));
   errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
   if (entry.protocol === "oidc" && !entry.scopes.includes("openid")) errs.push("scopes: must include openid");
@@ -108,6 +118,7 @@ export function validateIdp(entry) {
 function validateSamlIdp(entry) {
   const errs = checkSchema(idpSamlSchema, entry);
   if (errs.length) return errs;
+  errs.push(...logoErrors(entry));
   errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
   if (entry.metadata_url) {
     errs.push(...httpsUrl(entry.metadata_url, "metadata_url", { allowQuery: true }));
@@ -240,16 +251,28 @@ export function validateRegistry(doc, { strict = false } = {}) {
   return { idps, clients, dropped };
 }
 
-// CI: every file is registry/idps/<id>.json or registry/clients/<client_id>.json
-// and its name equals the identifier inside it.
+// CI: every file is registry/idps/<id>/idp.json, an optional
+// registry/idps/<id>/logo.<png|webp|jpg>, or registry/clients/<client_id>.json,
+// and its name equals the identifier inside it. Logos are checked by
+// checkLogo (magic bytes, size, dimensions, animation, trailing data).
 export function checkFileNames(files) {
   const errs = [];
+  const dirs = new Map();
   for (const f of files) {
-    const m = /^registry\/(idps|clients)\/([^/]+)\.json$/.exec(f.path);
-    if (!m) { errs.push(`${f.path}: files go in registry/idps/<id>.json or registry/clients/<client_id>.json`); continue; }
+    if (f.kind === "logo") {
+      if (!["png", "webp", "jpg"].includes(f.ext)) { errs.push(`${f.path}: a logo is logo.png, logo.webp or logo.jpg`); continue; }
+      const n = (dirs.get(f.id) || 0) + 1; dirs.set(f.id, n);
+      if (n > 1) errs.push(`registry/idps/${f.id}/: at most one logo file`);
+      if (!files.some((x) => x.kind === "idps" && x.id === f.id && x.path.endsWith("/idp.json"))) errs.push(`${f.path}: no idp.json next to the logo`);
+      errs.push(...checkLogo(f.bytes, f.ext).errors.map((e) => `${f.path}: ${e}`));
+      continue;
+    }
+    if (f.kind === "idps" && !f.path.endsWith("/idp.json")) { errs.push(`${f.path}: identity providers go in registry/idps/<id>/idp.json`); continue; }
+    if (f.kind !== "idps" && f.kind !== "clients") { errs.push(`${f.path}: files go in registry/idps/<id>/idp.json (with an optional logo.png, logo.webp or logo.jpg) or registry/clients/<client_id>.json`); continue; }
     if (!f.json || typeof f.json !== "object") { errs.push(`${f.path}: not valid JSON`); continue; }
-    const want = m[1] === "idps" ? f.json.id : f.json.client_id;
-    if (want !== m[2]) errs.push(`${f.path}: file name must equal the ${m[1] === "idps" ? "id" : "client_id"} (${String(want)})`);
+    const want = f.kind === "idps" ? f.json.id : f.json.client_id;
+    if (want !== f.id) errs.push(`${f.path}: ${f.kind === "idps" ? "directory" : "file"} name must equal the ${f.kind === "idps" ? "id" : "client_id"} (${String(want)})`);
+    if (f.kind === "idps" && "logo" in f.json) errs.push(`${f.path}: logo is set by the publish step; add the image as registry/idps/${f.id}/logo.<ext> instead`);
   }
   return errs;
 }
@@ -263,7 +286,7 @@ export function checkImmutable(base, head) {
   for (const kind of ["idps", "clients"]) {
     const have = new Set(head[kind] || []);
     for (const id of base[kind] || []) {
-      if (!have.has(id)) errs.push(`registry/${kind}/${id}.json: ${kind === "idps" ? "id" : "client_id"} "${id}" was removed or renamed; identifiers are permanent, set "status": "disabled" instead`);
+      if (!have.has(id)) errs.push(`${kind === "idps" ? `registry/idps/${id}/idp.json` : `registry/clients/${id}.json`}: ${kind === "idps" ? "id" : "client_id"} "${id}" was removed or renamed; identifiers are permanent, set "status": "disabled" instead`);
     }
   }
   return errs;

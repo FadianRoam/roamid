@@ -6,7 +6,7 @@ import { signingKeys, clientKeys } from "./lib/keys.js";
 import { allow } from "./lib/ratelimit.js";
 import { clientIp } from "./lib/edgesig.js";
 import { summary, daily } from "./lib/events.js";
-import { getRegistry, syncRegistry } from "./registry/store.js";
+import { getRegistry, syncRegistry, serveLogo } from "./registry/store.js";
 import { checkDomainProofs, proofState } from "./registry/domains.js";
 import { discoveryDoc, authorize, select, callback, token, userinfo, logout, healthMap, samlAcs, samlSso, samlCancel } from "./oidc/op.js";
 import { spMetadataHandler } from "./saml/sp.js";
@@ -32,7 +32,7 @@ function view(request) {
 }
 
 function publicIdp(i, health) {
-  return { id: i.id, protocol: i.protocol, name: i.name, ...(i.protocol === "saml2" ? { entity_id: i.entity_id || null, metadata_url: i.metadata_url || null } : { issuer: i.issuer }), homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, ...(i.note ? { note: i.note } : {}), health: health[i.id] || "unknown" };
+  return { id: i.id, protocol: i.protocol, name: i.name, ...(i.protocol === "saml2" ? { entity_id: i.entity_id || null, metadata_url: i.metadata_url || null } : { issuer: i.issuer }), homepage: i.homepage, email_domains: i.email_domains || [], status: i.status, ...(i.note ? { note: i.note } : {}), ...(i.logo ? { logo: { url: `/logos/${i.logo.path}`, type: i.logo.type, width: i.logo.width, height: i.logo.height } } : {}), health: health[i.id] || "unknown" };
 }
 
 async function statusData(env) {
@@ -147,6 +147,7 @@ export async function handle(request, env, ctx) {
   }
   if (p === "/status.json") return json(await statusData(env), { cors: true });
   if (p === "/transparency.json") return transparencyJson(env, url);
+  if (p.startsWith("/logos/") && (m === "GET" || m === "HEAD")) return serveLogo(env, p);
   const v = view(request);
   if (p === "/") {
     const reg = await getRegistry(env);
