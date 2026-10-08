@@ -33,6 +33,7 @@ html[lang^=zh]{--font:"Inter","PingFang SC","Hiragino Sans GB","Noto Sans SC","M
 --text:#e7ecf2;--muted:#cfd6dd;--dim:#9aa5b0;--line:rgba(231,236,242,.12);--line2:rgba(231,236,242,.28);
 --blue:#4c9dff;--blue-soft:rgba(76,157,255,.14);--on-blue:#0b1623;--good:#6fcf8e;--bad:#ff8a80;--warn:#f0c060}
 *{box-sizing:border-box;border-radius:0}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 var(--font);-webkit-text-size-adjust:100%}
 a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
