@@ -194,3 +194,15 @@ test("automerge: an identity provider directory (idp.json or logo) is never merg
     assert.equal(merges(g.calls), 0, filename);
   }
 });
+
+test("automerge: dispatches publish when the published registry is behind main", async () => {
+  const g = gh({ files: [] });
+  const api = async (path, opt) => (path === "/git/ref/heads/main" ? { object: { sha: "b".repeat(40) } } : path.startsWith("/pulls?") ? [] : g.api(path, opt));
+  const calls = [];
+  const spy = async (path, opt = {}) => { calls.push([opt.method || "GET", path]); return api(path, opt); };
+  await run({ api: spy, repo: REPO, base: BASE, review: okReview, log() {}, published: async () => "c".repeat(40) });
+  assert.ok(calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/publish.yml/dispatches"));
+  calls.length = 0;
+  await run({ api: spy, repo: REPO, base: BASE, review: okReview, log() {}, published: async () => "b".repeat(40) });
+  assert.ok(!calls.some(([m, p]) => m === "POST" && p === "/actions/workflows/publish.yml/dispatches"), "up to date: nothing");
+});

@@ -116,7 +116,7 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
   return reasons.length ? { reasons, sha } : { merge: true, sha };
 }
 
-export async function run({ api, repo, only, dry, base, review, log = console.log }) {
+export async function run({ api, repo, only, dry, base, review, log = console.log, published = null }) {
   const prs = only ? [await api(`/pulls/${only}`)] : await api("/pulls?state=open&per_page=50");
   const merged = [];
   for (const pr of prs) {
@@ -142,6 +142,15 @@ export async function run({ api, repo, only, dry, base, review, log = console.lo
     const comments = await api(`/issues/${pr.number}/comments?per_page=100`);
     if (comments.some((c) => c.body.includes(MARK(d.sha)))) continue;
     await api(`/issues/${pr.number}/comments`, { method: "POST", body: { body: `${MARK(d.sha)}\nAutomatic review did not merge this pull request. A maintainer can still review it.\n\n${d.reasons.map((r) => `- ${r}`).join("\n")}\n\nRules: docs/rp-integration.md, sections 1 and 12.` } });
+  }
+  // Reconcile: the published registry must be built from main's head. A
+  // missing push event (or a merge by the workflow token) is caught here.
+  if (!dry && !merged.length && published) {
+    try {
+      const head = (await api("/git/ref/heads/main")).object.sha;
+      const live = await published();
+      if (live && live !== head) { log(`published ${live.slice(0, 7)} is behind main ${head.slice(0, 7)}: dispatching publish`); await api("/actions/workflows/publish.yml/dispatches", { method: "POST", body: { ref: "main" } }); }
+    } catch (e) { log(`publish reconcile skipped: ${e.message}`); }
   }
   return merged;
 }
@@ -173,5 +182,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     api: githubApi(repo, process.env.GITHUB_TOKEN), repo,
     only: args.includes("--pr") ? Number(args[args.indexOf("--pr") + 1]) : Number(process.env.PR || 0) || null,
     dry: args.includes("--dry-run") || process.env.DRY_RUN === "true",
+    published: async () => (await (await fetch(`https://fadianroam.github.io/roamid/registry.json?t=${Date.now()}`, { signal: AbortSignal.timeout(10000) })).json()).commit,
   });
 }
