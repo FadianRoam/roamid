@@ -17,6 +17,9 @@
 //   - every changed entry passes the registry rules and the automated
 //     application review (scripts/review-clients.mjs), domain proof included;
 //   - the head commit and the file count are unchanged right before merging.
+// The transparency record is merged the same way when the pull request was
+// opened by github-actions[bot] from a transparency/ branch and changes only
+// transparency/YYYY/MM.md and .json (scripts/transparency-sync.mjs).
 // A review that cannot complete (live data or a block list unavailable)
 // leaves the pull request for the next run. Otherwise it comments once per
 // head commit with the reasons and leaves the pull request to a person.
@@ -28,6 +31,8 @@ import { reviewClients } from "./review-clients.mjs";
 
 export const MAX_FILES = 20;
 const CLIENT_FILE = /^registry\/clients\/([a-z0-9-]{2,64})\.json$/;
+const TRANSPARENCY_FILE = /^transparency\/\d{4}\/\d{2}\.(md|json)$/;
+export const BOT = "github-actions[bot]";
 const MARK = (sha) => `<!-- roamid-automerge:${sha} -->`;
 
 export function githubApi(repo, token, fetchFn = fetch) {
@@ -70,6 +75,16 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
   if (check.conclusion !== "success") reasons.push(`the check workflow ended with "${check.conclusion}"`);
   const files = await listFiles(api, pr.number);
   if (files.length !== pr.changed_files) return { reasons: [...reasons, `the file list is incomplete (${files.length} of ${pr.changed_files})`], sha };
+  // The transparency record: only the bot, only its branch, only its files.
+  if (files.some((f) => TRANSPARENCY_FILE.test(f.filename))) {
+    for (const f of files) {
+      if (!TRANSPARENCY_FILE.test(f.filename)) reasons.push(`${f.filename}: a transparency pull request changes only transparency/YYYY/MM.md and .json`);
+      else if (!["added", "modified"].includes(f.status)) reasons.push(`${f.filename}: ${f.status} (only added or modified files)`);
+    }
+    if (!pr.user || pr.user.login !== BOT) reasons.push(`transparency/ is merged automatically only when ${BOT} opened the pull request`);
+    if (!/^transparency\/\d{4}-\d{2}-\d{2}$/.test(pr.head && pr.head.ref || "") || !pr.head.repo || pr.head.repo.full_name !== repo) reasons.push("transparency/ is merged automatically only from a transparency/<date> branch of this repository");
+    return reasons.length ? { reasons, sha } : { merge: true, sha };
+  }
   const baseById = new Map(base.clients.map((c) => [c.client_id, c]));
   const changed = [];
   for (const f of files) {
@@ -129,6 +144,26 @@ export async function run({ api, repo, only, dry, base, review, log = console.lo
     await api(`/issues/${pr.number}/comments`, { method: "POST", body: { body: `${MARK(d.sha)}\nAutomatic review did not merge this pull request. A maintainer can still review it.\n\n${d.reasons.map((r) => `- ${r}`).join("\n")}\n\nRules: docs/rp-integration.md, sections 1 and 12.` } });
   }
   return merged;
+}
+
+// For bot pull requests (opened with the workflow token, which starts no
+// pull_request workflow): dispatch "check" on the branch, wait until its
+// check run for the head commit has finished, then dispatch this workflow for
+// the pull request. The required status check "check" is then on the head.
+export async function checkThenMerge(api, { branch, sha, pr, wait = 300, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = console.log }) {
+  await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
+  for (let t = 0; t < wait; t += 10) {
+    if (t) await sleep(10000);
+    const runs = await api(`/commits/${sha}/check-runs?check_name=check&per_page=10`);
+    const done = (runs.check_runs || []).filter((c) => c.status === "completed");
+    if (done.length) {
+      log(`check on ${sha.slice(0, 7)}: ${done[0].conclusion}`);
+      if (done[0].conclusion === "success" && pr) await api("/actions/workflows/automerge.yml/dispatches", { method: "POST", body: { ref: "main", inputs: { pr: String(pr) } } });
+      return done[0].conclusion;
+    }
+  }
+  log(`check on ${sha.slice(0, 7)}: not finished; the scheduled automatic review picks the pull request up`);
+  return null;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

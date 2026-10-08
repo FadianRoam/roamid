@@ -79,6 +79,8 @@ function ghMock({ exists = [] } = {}) {
     if (path.startsWith("/git/ref/heads/issue-")) throw new Error("404");
     if (path.startsWith("/pulls?")) return [];
     if (path === "/pulls" && opt.method === "POST") return { number: 41 };
+    if (path.startsWith("/contents/") && opt.method === "PUT") return { commit: { sha: "h".repeat(40) } };
+    if (path.startsWith(`/commits/${"h".repeat(40)}/check-runs`)) return { check_runs: [{ status: "completed", conclusion: "success" }] };
     return {};
   };
   return { api, calls };
@@ -96,6 +98,7 @@ test("issue -> pull request: valid application opens a bot PR and dispatches the
   const entry = JSON.parse(Buffer.from(put[2].content, "base64").toString());
   assert.equal(entry.contact.github, "alice-dev", "contact.github is the issue author");
   assert.ok(g.calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/check.yml/dispatches" && b.ref === "issue-9"));
+  assert.ok(g.calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches" && b.inputs.pr === "41"), "after the check on the head commit, the automatic review is started for the PR");
 });
 
 test("issue -> refused: pasted secret (redacted, nothing committed), client secret choice, invalid fields, taken id", async () => {

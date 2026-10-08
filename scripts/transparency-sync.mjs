@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Mirror the public record of the RoamID instance into this repository
 // (workflow transparency.yml): transparency/YYYY/MM.json and MM.md from the
-// operator decisions, and one GitHub issue (label report-upheld) per report
+// operator decisions, committed to a branch transparency/<date> and proposed
+// as a pull request that the automatic review merges (main is protected), and one GitHub issue (label report-upheld) per report
 // the operator published. The JSON is data: every value is escaped before it
 // is written into Markdown or an issue; nothing in it is executed.
-import { githubApi } from "./automerge.mjs";
+import { githubApi, checkThenMerge } from "./automerge.mjs";
 
 const LIVE = process.env.ROAMID_URL || "https://id.fadianro.am";
 const REPO = process.env.GITHUB_REPOSITORY || "FadianRoam/roamid";
@@ -45,20 +46,39 @@ export function issueFor(p, decisions) {
   };
 }
 
-export async function sync({ api, fetchFn = fetch, log = console.log }) {
+export async function sync({ api, fetchFn = fetch, log = console.log, today = new Date().toISOString().slice(0, 10), sleep }) {
   const decisions = await fetchAll("decisions", fetchFn);
   const pubs = await fetchAll("publications", fetchFn);
   const byMonth = new Map();
   for (const d of decisions) { const m = String(d.date).slice(0, 7); if (/^\d{4}-\d{2}$/.test(m)) (byMonth.get(m) || byMonth.set(m, []).get(m)).push(d); }
+  // The files that differ from main.
+  const changes = [];
   for (const [m, items] of byMonth) {
     const [y, mo] = m.split("-");
     for (const [path, content] of [[`transparency/${y}/${mo}.json`, JSON.stringify(items, null, 2) + "\n"], [`transparency/${y}/${mo}.md`, renderMonth(m, items)]]) {
       const cur = await api(`/contents/${path}?ref=main`).catch(() => null);
-      const old = cur ? Buffer.from(cur.content, "base64").toString("utf8") : null;
-      if (old === content) continue;
-      await api(`/contents/${path}`, { method: "PUT", body: { message: "update", content: Buffer.from(content).toString("base64"), branch: "main", ...(cur ? { sha: cur.sha } : {}) } });
-      log(`wrote ${path}`);
+      if ((cur ? Buffer.from(cur.content, "base64").toString("utf8") : null) !== content) changes.push({ path, content });
     }
+  }
+  if (changes.length) {
+    const branch = `transparency/${today}`;
+    const main = (await api("/git/ref/heads/main")).object.sha;
+    // The branch starts from main each run (a branch outside main may be reset).
+    const cur = await api(`/git/ref/heads/${branch}`).catch(() => null);
+    if (cur) await api(`/git/refs/heads/${branch}`, { method: "PATCH", body: { sha: main, force: true } });
+    else await api("/git/refs", { method: "POST", body: { ref: `refs/heads/${branch}`, sha: main } });
+    let head = main;
+    for (const c of changes) {
+      const prev = await api(`/contents/${c.path}?ref=${branch}`).catch(() => null);
+      const r = await api(`/contents/${c.path}`, { method: "PUT", body: { message: "update", content: Buffer.from(c.content).toString("base64"), branch, ...(prev ? { sha: prev.sha } : {}) } });
+      head = (r && r.commit && r.commit.sha) || head;
+      log(`${branch}: ${c.path}`);
+    }
+    const owner = (process.env.GITHUB_REPOSITORY || REPO).split("/")[0];
+    let pr = (await api(`/pulls?state=open&head=${owner}:${branch}`))[0];
+    if (!pr) pr = await api("/pulls", { method: "POST", body: { title: "update", head: branch, base: "main", body: `The public record from ${LIVE}/transparency.json (workflow transparency). Merged by the automatic review when the check passes.` } });
+    log(`pull request #${pr.number}`);
+    await checkThenMerge(api, { branch, sha: head, pr: pr.number, log, ...(sleep ? { sleep } : {}) });
   }
   const existing = await api("/issues?labels=report-upheld&state=all&per_page=100");
   for (const p of pubs) {

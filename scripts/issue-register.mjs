@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { buildClient, clientInstructions, buildIdp, idpInstructions, parseIssueForm, findSecrets, redactIssue, quote } from "./scaffold.mjs";
 import { APP_FORM, IDP_FORM, APPEAL_FORM, labelsOf } from "./issue-forms.mjs";
-import { githubApi } from "./automerge.mjs";
+import { githubApi, checkThenMerge } from "./automerge.mjs";
 import { checkLogo } from "../src/registry/logo.js";
 
 // An image attached to the issue form: only GitHub's own attachment hosts.
@@ -31,7 +31,7 @@ async function download(url) {
 const b64 = (s) => Buffer.from(s, "utf8").toString("base64");
 
 // Returns { action: "refused"|"invalid"|"opened"|"updated"|"ignored", ... } and performs it through `api`.
-export async function handleIssue(issue, { api, repo, log = console.log, appeal = postAppeal, fetchLogo = download }) {
+export async function handleIssue(issue, { api, repo, log = console.log, appeal = postAppeal, fetchLogo = download, sleep }) {
   const labels = (issue.labels || []).map((l) => (typeof l === "string" ? l : l.name));
   if (labels.includes("appeal") && issue.state === "open") return handleAppeal(issue, { api, log, appeal });
   if (!labels.includes("registration") || issue.state !== "open") return { action: "ignored" };
@@ -97,10 +97,10 @@ export async function handleIssue(issue, { api, repo, log = console.log, appeal 
     }
   }
   const prev = await api(`/contents/${path}?ref=${branch}`).catch(() => null);
-  await api(`/contents/${path}`, { method: "PUT", body: { message: "update", content: b64(JSON.stringify(entry, null, 2) + "\n"), branch, ...(prev ? { sha: prev.sha } : {}) } });
+  let put = await api(`/contents/${path}`, { method: "PUT", body: { message: "update", content: b64(JSON.stringify(entry, null, 2) + "\n"), branch, ...(prev ? { sha: prev.sha } : {}) } });
   if (logo) {
     const prevLogo = await api(`/contents/${logo.path}?ref=${branch}`).catch(() => null);
-    await api(`/contents/${logo.path}`, { method: "PUT", body: { message: "update", content: Buffer.from(logo.bytes).toString("base64"), branch, ...(prevLogo ? { sha: prevLogo.sha } : {}) } });
+    put = await api(`/contents/${logo.path}`, { method: "PUT", body: { message: "update", content: Buffer.from(logo.bytes).toString("base64"), branch, ...(prevLogo ? { sha: prevLogo.sha } : {}) } });
   }
   if (logoNotes.length) await comment(logoNotes.join("\n\n"));
   const open = await api(`/pulls?state=open&head=${repo.split("/")[0]}:${branch}`);
@@ -118,12 +118,13 @@ export async function handleIssue(issue, { api, repo, log = console.log, appeal 
       return { action: "branch", branch, path, entry };
     }
   }
-  // Pull requests opened with the workflow token do not start pull_request
-  // workflows: run the check for the branch explicitly.
-  await api("/actions/workflows/check.yml/dispatches", { method: "POST", body: { ref: branch } });
   const steps = kind === "app" ? clientInstructions(entry) : idpInstructions(entry);
   await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}${logo ? ` and ${quote(logo.path)}` : ""}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\n${kind === "app" ? "When the checks pass and the domain is proven, it is merged automatically (the automatic review runs twice an hour) and live about 5 minutes after the merge." : "A maintainer reviews identity providers (docs/registry.md)."}`);
   log(`#${issue.number}: ${open[0] ? "updated" : "opened"} PR #${pr.number} (${path})`);
+  // Pull requests opened with the workflow token do not start pull_request
+  // workflows: run the check for the branch, then the automatic review.
+  const head = put && put.commit && put.commit.sha;
+  if (head) await checkThenMerge(api, { branch, sha: head, pr: kind === "app" ? pr.number : null, log, ...(sleep ? { sleep } : {}) });
   return { action: open[0] ? "updated" : "opened", pr: pr.number, path, entry };
 }
 
