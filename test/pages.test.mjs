@@ -109,3 +109,13 @@ test("fixtures: only where FIXTURES=1; the picker and /idps render 500 providers
   assert.equal((await get(h, "/logos/fx.00000000.png")).status, 200);
   assert.match(await (await get(h, "/fixture/picker?n=0")).text(), /class="empty"/);
 });
+
+test("base stylesheet: linked by default; omitted when the platform ships it", async () => {
+  const { baseStylesheet } = await import("../src/ui/pages.js");
+  const { replacesBaseStylesheet } = await import("../src/platform/index.js");
+  assert.equal(replacesBaseStylesheet, false);
+  assert.match(baseStylesheet(false), /^<link rel="stylesheet" href="\/assets\/roamid\.[0-9a-f]+\.css">$/);
+  assert.equal(baseStylesheet(true), "");
+  const h = await setup();
+  assert.match(await (await h.request("/idps")).text(), /<link rel="stylesheet" href="\/assets\/roamid\.[0-9a-f]+\.css">/);
+});

@@ -5,7 +5,7 @@
 // JavaScript and image file is served from this origin (src/ui/manifest.js).
 
 import { t, errorText, localName, localPath, isTwinPath } from "./i18n.js";
-import { renderHead, stylesheets, hero } from "../platform/index.js";
+import { renderHead, stylesheets, hero, replacesBaseStylesheet } from "../platform/index.js";
 import { norm, searchText, idpHost, hostOf, orderIdps, pickerSplit, sortIdps, groupIdps, stateOf } from "./list.js";
 import { ASSETS } from "./manifest.js";
 
@@ -81,7 +81,7 @@ function doc({ lang, theme, title, pageTitle = title, body, head = "", descripti
 <meta name="color-scheme" content="${theme === "system" ? "light dark" : theme}">
 ${renderHead({ lang, path: enPath, query, status, isError, title: pageTitle, docTitle: title, description, base: BASE, data, page, noindex: !isPublic })}
 <link rel="icon" href="${ASSETS["mark.svg"]}" type="image/svg+xml">
-<link rel="stylesheet" href="${ASSETS["roamid.css"]}">${stylesheets({ lang, page })}
+${baseStylesheet(replacesBaseStylesheet)}${stylesheets({ lang, page })}
 <script src="${ASSETS["roamid.js"]}" defer></script>${head}
 </head>
 <body>
@@ -89,6 +89,9 @@ ${body}
 </body>
 </html>`;
 }
+
+// The base stylesheet link, unless the platform module ships the base CSS itself.
+export const baseStylesheet = (replaced) => (replaced ? "" : `<link rel="stylesheet" href="${ASSETS["roamid.css"]}">`);
 
 // The page footer, on every page: links and "Powered by YunZheng LAB".
 export function footer(lang) {

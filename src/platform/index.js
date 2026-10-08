@@ -1,4 +1,7 @@
-// Platform interface: the parts of a RoamID deployment that an instance may
+// Platform interface (exports: buildMarker, renderHead, replacesBaseStylesheet,
+// stylesheets, hero, sitemap, robots, clientIp, notifyOperator, humanCheck,
+// responseHeaders, pages, languagePaths, assetSizes): the parts of a RoamID
+// deployment that an instance may
 // replace (styling, search engine metadata, edge integration, operator
 // notifications, a human check on the report form). These are the generic
 // defaults: with them this repository runs standalone and complete. A
@@ -17,6 +20,11 @@ export function renderHead(ctx) {
   return `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${esc(ctx.docTitle || ctx.title)}</title>${ctx.description ? `\n<meta name="description" content="${esc(ctx.description)}">` : ""}${ctx.noindex ? '\n<meta name="robots" content="noindex">' : ""}`;
 }
+
+// true: the page omits its link to the base stylesheet (assets/roamid.css)
+// because stylesheets() ships that CSS itself (for example inside a cascade
+// layer under the deployment's own rules).
+export const replacesBaseStylesheet = false;
 
 // Extra stylesheets and font preloads, after the base stylesheet. ctx: { lang, page }.
 export function stylesheets(ctx) {
