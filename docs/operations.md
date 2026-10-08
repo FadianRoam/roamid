@@ -116,8 +116,8 @@ Addresses are stored only as truncated hashes, per window.
   `main` 不能被任何人删除或强制推送。所有改动都经拉取请求，且必须通过状态检查 `check`。
 - `.github/CODEOWNERS`: every path needs a code owner's review, except `registry/clients/` and `transparency/`. Those pull requests are merged by the automatic review (`automerge`): application entries that pass the review, and the transparency record opened by `github-actions[bot]` from a `transparency/<date>` branch.
   `.github/CODEOWNERS`：除 `registry/clients/` 与 `transparency/` 外，所有路径都需代码所有者审核。这两类拉取请求由自动审核（`automerge`）合并：通过审核的应用条目，以及由 `github-actions[bot]` 从 `transparency/<日期>` 分支提交的公开记录。
-- Pull requests opened by a workflow start no `pull_request` workflow: the bot dispatches `check` on the branch, waits for the check run on the head commit, then starts `automerge` for that pull request. The schedule (twice an hour) picks up anything left.
-  由工作流创建的拉取请求不会触发 `pull_request` 工作流：机器人在分支上启动 `check`，等待头提交上的检查完成，再为该拉取请求启动 `automerge`。定时任务（每小时两次）处理其余情况。
+- For a pull request opened by a workflow, GitHub holds its `check` run (`action_required`). The bot releases that run only for its own branch (`issue-<n>` or `transparency/<date>`), the exact head commit it pushed, this repository and the `check` workflow (a workflow-run approval; pull requests are never approved by a workflow), waits for the result, then starts `automerge` for the pull request. The schedule (twice an hour) picks up anything left.
+  对由工作流创建的拉取请求，GitHub 会暂停其 `check` 运行（`action_required`）。机器人只为自己的分支（`issue-<编号>` 或 `transparency/<日期>`）、自己推送的确切头提交、本仓库与 `check` 工作流放行该运行（工作流运行的批准；工作流从不批准拉取请求），等待结果，再为该拉取请求启动 `automerge`。定时任务（每小时两次）处理其余情况。
 - Workflow actions are pinned to full commit SHAs.
   工作流中的 action 均固定到完整提交 SHA。
 

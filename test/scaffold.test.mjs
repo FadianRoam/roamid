@@ -79,8 +79,11 @@ function ghMock({ exists = [] } = {}) {
     if (path.startsWith("/git/ref/heads/issue-")) throw new Error("404");
     if (path.startsWith("/pulls?")) return [];
     if (path === "/pulls" && opt.method === "POST") return { number: 41 };
-    if (path.startsWith("/contents/") && opt.method === "PUT") return { commit: { sha: "h".repeat(40) } };
-    if (path.startsWith(`/commits/${"h".repeat(40)}/check-runs`)) return { check_runs: [{ status: "completed", conclusion: "success" }] };
+    if (path.startsWith("/contents/") && opt.method === "PUT") return { commit: { sha: "d".repeat(40) } };
+    if (path.startsWith(`/actions/runs?head_sha=${"d".repeat(40)}&event=pull_request`)) {
+      const released = calls.some(([m, p]) => m === "POST" && /^\/actions\/runs\/555\/approve$/.test(p));
+      return { workflow_runs: [{ id: 555, name: "check", path: ".github/workflows/check.yml", event: "pull_request", head_repository: { full_name: "FadianRoam/roamid" }, head_branch: "issue-9", head_sha: "d".repeat(40), run_number: 4, status: "completed", conclusion: released ? "success" : "action_required" }] };
+    }
     return {};
   };
   return { api, calls };
@@ -89,7 +92,7 @@ const issue = (body, o = {}) => ({ number: 9, state: "open", labels: [{ name: "r
 
 test("issue -> pull request: valid application opens a bot PR and dispatches the check", async () => {
   const g = ghMock();
-  const r = await handleIssue(issue(appBody()), { api: g.api, repo: "FadianRoam/roamid", log() {} });
+  const r = await handleIssue(issue(appBody()), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "opened");
   const put = g.calls.find(([m, p]) => m === "PUT" && p === "/contents/registry/clients/issue-portal.json");
   assert.ok(put, "the entry is committed");
@@ -97,36 +100,36 @@ test("issue -> pull request: valid application opens a bot PR and dispatches the
   assert.equal(put[2].message, "update");
   const entry = JSON.parse(Buffer.from(put[2].content, "base64").toString());
   assert.equal(entry.contact.github, "alice-dev", "contact.github is the issue author");
-  assert.ok(g.calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/check.yml/dispatches" && b.ref === "issue-9"));
+  assert.ok(g.calls.some(([m, p]) => m === "POST" && p === "/actions/runs/555/approve"), "the held pull_request check run for the bot's own head is released");
   assert.ok(g.calls.some(([m, p, b]) => m === "POST" && p === "/actions/workflows/automerge.yml/dispatches" && b.inputs.pr === "41"), "after the check on the head commit, the automatic review is started for the PR");
 });
 
 test("issue -> refused: pasted secret (redacted, nothing committed), client secret choice, invalid fields, taken id", async () => {
   let g = ghMock();
-  let r = await handleIssue(issue(appBody({ "Contact email / 联系邮箱": "password = hunter2hunter2" })), { api: g.api, repo: "FadianRoam/roamid", log() {} });
+  let r = await handleIssue(issue(appBody({ "Contact email / 联系邮箱": "password = hunter2hunter2" })), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "refused");
   const patch = g.calls.find(([m, p]) => m === "PATCH" && p === "/issues/9");
   assert.ok(patch && !/hunter2/.test(patch[2].body));
   assert.ok(!g.calls.some(([m]) => m === "PUT"), "nothing committed");
   g = ghMock();
-  r = await handleIssue(issue(appBody({ "Client authentication (OIDC) / 客户端认证": "client_secret (use npm run new:app)" })), { api: g.api, repo: "FadianRoam/roamid", log() {} });
+  r = await handleIssue(issue(appBody({ "Client authentication (OIDC) / 客户端认证": "client_secret (use npm run new:app)" })), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.reason, "client_secret");
   g = ghMock();
-  r = await handleIssue(issue(appBody({ "Name (English) / 名称（英文）": "@everyone\n<b>Gооgle</b>", "Redirect URIs (OIDC) / 回调地址": "https://evil.example/cb" })), { api: g.api, repo: "FadianRoam/roamid", log() {} });
+  r = await handleIssue(issue(appBody({ "Name (English) / 名称（英文）": "@everyone\n<b>Gооgle</b>", "Redirect URIs (OIDC) / 回调地址": "https://evil.example/cb" })), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "invalid");
   const c = g.calls.find(([m, p]) => m === "POST" && p === "/issues/9/comments");
   assert.doesNotMatch(c[2].body, /@everyone|<b>/, "issue text is quoted safely");
   assert.ok(!g.calls.some(([m]) => m === "PUT"));
   g = ghMock({ exists: ["registry/clients/issue-portal.json"] });
-  assert.equal((await handleIssue(issue(appBody()), { api: g.api, repo: "FadianRoam/roamid", log() {} })).action, "invalid");
+  assert.equal((await handleIssue(issue(appBody()), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} })).action, "invalid");
   g = ghMock();
-  assert.equal((await handleIssue(issue(appBody(), { labels: [{ name: "application" }] }), { api: g.api, repo: "x/y", log() {} })).action, "ignored", "only labelled registration issues");
+  assert.equal((await handleIssue(issue(appBody(), { labels: [{ name: "application" }] }), { api: g.api, repo: "x/y", log() {}, sleep: async () => {} })).action, "ignored", "only labelled registration issues");
 });
 
 test("issue -> identity provider: PR for human review with the redirect URI and TXT records", async () => {
   const body = Object.entries({ "id": "issue-idp", "Name (English) / 名称（英文）": "Issue IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Email domains / 邮箱域名": "example.org", "Contact email / 联系邮箱": "ops@example.org" }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
   const g = ghMock();
-  const r = await handleIssue(issue(body, { labels: [{ name: "registration" }, { name: "identity-provider" }] }), { api: g.api, repo: "FadianRoam/roamid", log() {} });
+  const r = await handleIssue(issue(body, { labels: [{ name: "registration" }, { name: "identity-provider" }] }), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "opened");
   const c = g.calls.filter(([m, p]) => m === "POST" && p === "/issues/9/comments").pop();
   assert.match(c[2].body, /callback\/issue-idp/);
@@ -171,7 +174,7 @@ test("issue -> identity provider with a logo attachment: checked like CI, commit
 test("issue -> branch only when the workflow token may not open pull requests", async () => {
   const g = ghMock();
   const api = async (path, opt = {}) => { if (path === "/pulls" && opt.method === "POST") throw new Error("POST /pulls: HTTP 403 not permitted"); return g.api(path, opt); };
-  const r = await handleIssue(issue(appBody()), { api, repo: "FadianRoam/roamid", log() {} });
+  const r = await handleIssue(issue(appBody()), { api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "branch");
   assert.ok(g.calls.some(([m, p]) => m === "PUT" && p === "/contents/registry/clients/issue-portal.json"));
   const c = g.calls.filter(([m, p]) => m === "POST" && p === "/issues/9/comments").pop();
