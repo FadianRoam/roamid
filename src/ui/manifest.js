@@ -2,10 +2,14 @@
 export const ASSETS = {
   "fonts/figtree-latin.woff2": "/assets/figtree-latin.8330490a01.woff2",
   "fonts/figtree-latin-ext.woff2": "/assets/figtree-latin-ext.f153aa07c1.woff2",
-  "band.mp4": "/assets/band.282e918b13.mp4",
+  "band.mp4": "/video/band.282e918b13.mp4",
   "poster.webp": "/assets/poster.f972ce8a50.webp",
   "mark.svg": "/assets/mark.a16ec2317e.svg",
   "boot.js": "/assets/boot.2d7f7354b4.js",
   "roamid.js": "/assets/roamid.3ce7c9d21f.js",
   "roamid.css": "/assets/roamid.e744081a3f.css"
+};
+// Byte sizes of the files served with ranges (the assets binding streams without Content-Length).
+export const SIZES = {
+  "/video/band.282e918b13.mp4": 13717501
 };

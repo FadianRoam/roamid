@@ -85,7 +85,7 @@ export async function handle(request, env, ctx) {
   const url = new URL(request.url);
   const p = url.pathname;
   const m = request.method;
-  if (p.startsWith("/assets/") && p.endsWith(".mp4") && env.ASSETS && (m === "GET" || m === "HEAD")) return serveAssetWithRange(request, env);
+  if (p.startsWith("/video/") && p.endsWith(".mp4") && env.ASSETS && (m === "GET" || m === "HEAD")) return serveAssetWithRange(request, env);
   if (p === "/.well-known/openid-configuration") return m === "OPTIONS" ? corsPreflight() : json(discoveryDoc(env), { cache: PUBLIC_CACHE, cors: true });
   if (p === "/jwks.json") return json((await signingKeys(env)).jwks, { cache: PUBLIC_CACHE, cors: true });
   if (p === "/client-jwks.json") return json((await clientKeys(env)).jwks, { cache: PUBLIC_CACHE, cors: true });

@@ -5,7 +5,15 @@ import { serveAssetWithRange } from "../src/lib/range.js";
 
 const data = new Uint8Array(100000).map((_, i) => i % 251);
 const env = { ASSETS: { fetch: async () => new Response(new Blob([data]).stream(), { headers: { "Content-Length": String(data.length), "Content-Type": "video/mp4" } }) } };
-const get = (range, method = "GET") => serveAssetWithRange(new Request("https://x.test/assets/a.mp4", { method, headers: range ? { Range: range } : {} }), env);
+const get = (range, method = "GET") => serveAssetWithRange(new Request("https://x.test/video/a.mp4", { method, headers: range ? { Range: range } : {} }), env);
+// The assets binding streams without Content-Length: the size comes from the manifest.
+const envNoLen = { ASSETS: { fetch: async () => new Response(new Blob([data]).stream()) } };
+
+test("size from the manifest when the binding sends no Content-Length", async () => {
+  const r = await serveAssetWithRange(new Request("https://x.test/video/a.mp4", { headers: { Range: "bytes=5-9" } }), envNoLen, { "/video/a.mp4": data.length });
+  assert.equal(r.status, 206);
+  assert.deepEqual(new Uint8Array(await r.arrayBuffer()), data.subarray(5, 10));
+});
 
 test("whole file without Range, with Accept-Ranges", async () => {
   const r = await get();

@@ -1,13 +1,19 @@
 // Byte ranges for media served from the static assets binding, which itself
 // answers every request with the whole file. Safari and some players require
-// 206 Partial Content for video.
+// 206 Partial Content for video. The file lives at /media/<name>; the page
+// refers to /video/<name>, which has no static file, so the Worker runs.
+
+import { SIZES } from "../ui/manifest.js";
 
 const RANGE_RE = /^bytes=(\d*)-(\d*)$/;
 
-export async function serveAssetWithRange(request, env) {
-  const res = await env.ASSETS.fetch(new Request(request.url, { method: "GET" }));
+export async function serveAssetWithRange(request, env, sizes = SIZES) {
+  const u = new URL(request.url);
+  u.pathname = u.pathname.replace(/^\/video\//, "/media/");
+  u.search = "";
+  const res = await env.ASSETS.fetch(new Request(u.toString(), { method: "GET" }));
   const range = request.headers.get("Range");
-  const size = Number(res.headers.get("Content-Length"));
+  const size = Number(res.headers.get("Content-Length") || sizes[new URL(request.url).pathname]);
   const headers = new Headers(res.headers);
   headers.set("Accept-Ranges", "bytes");
   if (!res.ok || !range || !Number.isFinite(size) || size <= 0) {
