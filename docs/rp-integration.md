@@ -249,7 +249,8 @@ An application that only speaks SAML 2.0 registers an entry with `"protocol": "s
 | Validity | 5 minutes |
 
 - **AuthnRequest signatures.** When the entry has `sign_cert`, every AuthnRequest MUST be signed with it: the Redirect binding signature (`SigAlg` RSA-SHA256 or RSA-SHA512) or an enveloped signature for HTTP-POST. Unsigned or wrongly signed requests are refused with `RequestDenied`. Each of `SAMLRequest`, `RelayState`, `SigAlg` and `Signature` may appear once.
-- **IdP-initiated.** `https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<value>` signs the person in and posts an unsolicited Response (no `InResponseTo`) to the first ACS URL.
+- **Entity ID.** `entity_id` is an `https://` URL on the application's `domain` or a subdomain of it (no other scheme, no port, no user information), and unique across the registry and the developer console. It is the Audience of every assertion RoamID issues to the application.
+- **IdP-initiated.** Only for an entry with `"idp_initiated": true` (default `false`; in the console, the "Allow IdP-initiated sign-in" option): `https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<value>` signs the person in and posts an unsolicited Response (no `InResponseTo`) to the first ACS URL. Without it the request is refused with `invalid_request`.
 - **Passive and forced.** `IsPassive="true"` behaves like OIDC `prompt=none` (status `NoPassive` when no identity provider was chosen before); `ForceAuthn="true"` is passed to the identity provider.
 - **Errors** come back as a signed Response with a non-success status; the RoamID error code is in `StatusMessage` (see [errors.md](errors.md)). A cancelled sign-in gives `Responder` / `AuthnFailed`.
 

@@ -23,7 +23,8 @@ async function consoleSetup() {
 }
 
 // Sign in to the console as `user` with a fresh cookie jar.
-async function consoleLogin(h, user) {
+const consoleLogin = (h, user) => consoleLoginAt(h, user, "good");
+async function consoleLoginAt(h, user, idp) {
   h.cookies = new Map();
   let r = await h.request("/console/login");
   assert.equal(r.status, 303);
@@ -31,8 +32,8 @@ async function consoleLogin(h, user) {
   r = await h.request(authz);
   const sel = r.headers.get("Location");
   const tx = new URL(BASE + sel).searchParams.get("tx");
-  r = await h.request("/select", { method: "POST", body: new URLSearchParams({ tx, idp: "good" }).toString() });
-  const cb = h.idps.good.issue(r.headers.get("Location"), user);
+  r = await h.request("/select", { method: "POST", body: new URLSearchParams({ tx, idp }).toString() });
+  const cb = h.idps[idp].issue(r.headers.get("Location"), user);
   r = await h.request(cb);
   const back = r.headers.get("Location");
   assert.ok(back.startsWith(`${BASE}/console/callback?`), back);
@@ -216,7 +217,16 @@ test("console: localhost callbacks keep development mode; only owners and co-own
   const inv = await post(h, `/console/app/${c.id}/owners/invite`, { email: "bob@example.org" });
   const link = /id="invite-link">([^<]+)</.exec(await inv.text())[1];
   await consoleLogin(h, USERS.olga);
-  assert.equal((await h.request(link.replace(BASE, ""))).status, 403, "another email cannot accept");
+  assert.equal((await h.request(link.replace(BASE, ""))).status, 404, "another email: reads as not valid");
+  // bob@example.org from an identity provider that is not authoritative for example.org: refused.
+  await consoleLogin(h, USERS.bob);
+  const asserted = await h.request(link.replace(BASE, ""));
+  assert.equal(asserted.status, 403);
+  assert.match(await asserted.text(), /sign in with the identity provider that is authoritative for example\.org/);
+  // The provider proves example.org: bob's address is authoritative and verified.
+  h.registry.idps[0].email_domains = ["example.org"];
+  h.txt["_roamid.example.org"] = ["roamid-idp=good"];
+  await h.sync();
   await consoleLogin(h, USERS.bob);
   const csrf = await csrfOf(h);
   const acc = await h.request(link.replace(BASE, ""), { method: "POST", body: `csrf=${csrf}`, headers: { Origin: BASE } });
@@ -526,4 +536,59 @@ test("no workflow or script approves pull requests", async () => {
     const s = readFileSync(new URL(f, import.meta.url), "utf8");
     assert.doesNotMatch(s, /\/reviews\b|event:\s*["']?APPROVE|gh pr review|--approve/i, f);
   }
+});
+
+test("co-owner invitations need an authoritative, verified address for exactly that email", async () => {
+  const h = await setup({ idps: { good: "idp.example.test", evil: "evil.example.test" }, txt: { "_roamid.example.org": ["roamid-idp=good"] } });
+  h.env.OPERATOR_WEBHOOK_URL = "https://hooks.example.test/roamid";
+  h.registry.idps[0].email_domains = ["example.org"];
+  await h.sync();
+  await consoleLogin(h, USERS.alice);
+  const c = await createApp(h);
+  const invite = async (email) => /id="invite-link">([^<]+)</.exec(await (await post(h, `/console/app/${c.id}/owners/invite`, { email })).text())[1].replace(BASE, "");
+  const accept = async (link) => { const csrf = await csrfOf(h); return h.request(link, { method: "POST", body: `csrf=${csrf}`, headers: { Origin: BASE } }); };
+  const owners = async () => (await h.db.prepare("SELECT sub FROM app_owners WHERE client_id = ?").bind(c.id).all()).results.length;
+  // The same address from another identity provider (asserted there): refused.
+  await consoleLogin(h, USERS.alice);
+  let link = await invite("victim@example.org");
+  const victim = { sub: "victim-1", email: "victim@example.org", email_verified: true, name: "Victim" };
+  await consoleLoginAt(h, victim, "evil");
+  assert.equal((await accept(link)).status, 403, "asserted by a provider that is not authoritative");
+  assert.equal((await h.request("/console")).status, 200);
+  assert.doesNotMatch(await (await h.request("/console")).text(), /invit/i, "the console home does not list it either");
+  // Authoritative provider, but the address is not verified there: refused.
+  await consoleLoginAt(h, { ...victim, email_verified: false }, "good");
+  assert.equal((await accept(link)).status, 403, "authoritative but unverified");
+  // Authoritative and verified: accepted.
+  await consoleLoginAt(h, victim, "good");
+  assert.equal((await accept(link)).status, 303);
+  assert.equal(await owners(), 2);
+});
+
+test("console SAML apps: entity ID on the app's domain, unique; IdP-initiated only when chosen", async () => {
+  const h = await consoleSetup();
+  await consoleLogin(h, USERS.alice);
+  const samlApp = (o) => appFields({ protocol: "saml2", redirect_uris: "", auth_method: "", entity_id: "https://wiki.example.org/saml", acs_urls: "https://wiki.example.org/acs", ...o });
+  const foreign = await post(h, "/console/new", samlApp({ entity_id: "https://sso.othercorp.example/saml" }));
+  assert.match(await foreign.text(), /data-code="entity_domain"/);
+  const urn = await post(h, "/console/new", samlApp({ entity_id: "urn:example:wiki" }));
+  assert.match(await urn.text(), /data-code="entity_domain"/);
+  const ok = await post(h, "/console/new", samlApp({}));
+  assert.match(await ok.text(), /Application created/);
+  const id = (await h.db.prepare("SELECT client_id FROM apps WHERE protocol = 'saml2'").first()).client_id;
+  const row = await h.db.prepare("SELECT config FROM apps WHERE client_id = ?").bind(id).first();
+  assert.equal(JSON.parse(row.config).entity_id, "https://wiki.example.org/saml");
+  assert.equal(JSON.parse(row.config).idp_initiated, undefined, "off unless chosen");
+  const dup = await post(h, "/console/new", samlApp({ name_en: "Other Wiki", name_zh: "" }));
+  assert.match(await dup.text(), /data-code="entity_taken"/);
+  assert.ok((await (await h.request("/apps.json")).json()).saml_entities.some((x) => x.client_id === id));
+});
+
+test("verifiedEmail: only an authoritative and verified address counts", async () => {
+  const { verifiedEmail } = await import("../src/console/session.js");
+  assert.equal(verifiedEmail({ email: "A@Example.org", email_verified: 1, email_authority: "authoritative" }), "a@example.org");
+  assert.equal(verifiedEmail({ email: "a@example.org", email_verified: 1, email_authority: "asserted" }), null, "verified but asserted");
+  assert.equal(verifiedEmail({ email: "a@example.org", email_verified: 0, email_authority: "authoritative" }), null, "authoritative but not verified");
+  assert.equal(verifiedEmail({ email: null, email_verified: 1, email_authority: "authoritative" }), null);
+  assert.equal(verifiedEmail(null), null);
 });

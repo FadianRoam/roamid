@@ -13,7 +13,7 @@ const ACS = `${BASE}/saml/acs/samlidp`;
 const SP_ENTITY = `${BASE}/saml/sp`;
 
 async function samlSetup(idpExtra = {}, opts = {}) {
-  const h = await setup({ extraIdps: [samlIdpEntry("samlidp", idpExtra)], clients: [clientEntry("spa"), samlSpEntry("sp"), samlSpEntry("signed", { sign_cert: FX.spCert })], ...opts });
+  const h = await setup({ extraIdps: [samlIdpEntry("samlidp", idpExtra)], clients: [clientEntry("spa"), samlSpEntry("sp", { idp_initiated: true }), samlSpEntry("signed", { sign_cert: FX.spCert })], ...opts });
   return h;
 }
 
@@ -266,6 +266,9 @@ test("SAML SP: signed Redirect request accepted; IdP-initiated; cancel posts Aut
   const sig = sign("sha256", Buffer.from(q), FX.spKey).toString("base64");
   const ok = await h.request(`/saml/idp/sso?${q}&Signature=${encodeURIComponent(sig)}`);
   assert.equal(ok.status, 303);
+  const refused = await h.request("/saml/idp/sso?sp=signed");
+  assert.equal(refused.status, 400, "IdP-initiated sign-in only for an application that opted in");
+  assert.match(await refused.text(), /IdP-initiated sign-in is not enabled/);
   const idpInit = await h.request("/saml/idp/sso?sp=sp&RelayState=deep");
   assert.equal(idpInit.status, 303);
   const tx = new URL(BASE + idpInit.headers.get("Location")).searchParams.get("tx");

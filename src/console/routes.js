@@ -13,7 +13,7 @@ import { LIMITS } from "../apps/checks.js";
 import { recordDecision, redactReportText } from "../apps/transparency.js";
 import { pickLang, pickTheme, t, localName } from "../ui/i18n.js";
 import { newNonce } from "../lib/http.js";
-import { loginStart, loginCallback, getSession, logoutSession, readPost, isOperator } from "./session.js";
+import { loginStart, loginCallback, getSession, logoutSession, readPost, isOperator, verifiedEmail } from "./session.js";
 import * as V from "./views.js";
 
 const view = (request, extra = {}) => { const u = new URL(request.url); return { lang: pickLang(request), theme: pickTheme(request), nonce: newNonce(), path: u.pathname + u.search, ...extra }; };
@@ -36,14 +36,14 @@ function readAppForm(f) {
     name_en: str("name_en", 80), name_zh: str("name_zh", 80), domain: str("domain", 253).toLowerCase().replace(/\.$/, ""), homepage: str("homepage", 300),
     protocol: f.get("protocol") === "saml2" ? "saml2" : "oidc", redirect_uris: lines("redirect_uris"), post_logout_redirect_uris: lines("post_logout_redirect_uris"),
     auth_method: method, jwks_uri: str("jwks_uri", 300), subject_type: f.get("subject_type") === "pairwise" ? "pairwise" : "public",
-    allowed_idps: f.getAll("allowed_idps").map(String).slice(0, 50), entity_id: str("entity_id", 300), acs_urls: lines("acs_urls"), sign_cert: str("sign_cert", 8000),
+    allowed_idps: f.getAll("allowed_idps").map(String).slice(0, 50), entity_id: str("entity_id", 300), acs_urls: lines("acs_urls"), idp_initiated: f.get("idp_initiated") === "yes", sign_cert: str("sign_cert", 8000),
   };
 }
 
 function formFromRow(row) {
   const e = appEntry(row);
   return { name_en: e.name.en, name_zh: e.name.zh || "", domain: e.domain, homepage: e.homepage, protocol: e.protocol, redirect_uris: e.redirect_uris || [], post_logout_redirect_uris: e.post_logout_redirect_uris || [],
-    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", subject_type: e.subject_type || "public", allowed_idps: e.allowed_idps || [], entity_id: e.entity_id || "", acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
+    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", subject_type: e.subject_type || "public", allowed_idps: e.allowed_idps || [], entity_id: e.entity_id || "", idp_initiated: e.idp_initiated === true, acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
 }
 
 // The registry-shaped entry (for the shared rules) and the stored config.
@@ -51,7 +51,7 @@ function toEntry(clientId, v) {
   const config = { subject_type: v.subject_type };
   if (v.allowed_idps.length) config.allowed_idps = v.allowed_idps;
   if (v.protocol === "saml2") {
-    config.entity_id = v.entity_id; config.acs_urls = v.acs_urls;
+    config.entity_id = v.entity_id; config.acs_urls = v.acs_urls; if (v.idp_initiated) config.idp_initiated = true;
     if (v.sign_cert) config.sign_cert = v.sign_cert;
   } else {
     config.redirect_uris = v.redirect_uris; config.token_endpoint_auth_method = v.auth_method;
@@ -132,8 +132,8 @@ export async function handleConsole(request, env, p) {
     const { results } = await env.DB.prepare("SELECT a.*, o.role FROM apps a JOIN app_owners o ON o.client_id = a.client_id WHERE o.sub = ? ORDER BY a.created_at DESC").bind(s.sub).all();
     const apps = (results || []).map((r) => ({ ...appEntry(r), role: r.role }));
     const invites = [];
-    if (s.email) {
-      const { results: inv } = await env.DB.prepare("SELECT i.*, a.name_en, a.name_zh FROM app_invites i JOIN apps a ON a.client_id = i.client_id WHERE i.email = ? AND i.expires > ?").bind(s.email.toLowerCase(), now()).all();
+    if (verifiedEmail(s)) {
+      const { results: inv } = await env.DB.prepare("SELECT i.*, a.name_en, a.name_zh FROM app_invites i JOIN apps a ON a.client_id = i.client_id WHERE i.email = ? AND i.expires > ?").bind(verifiedEmail(s), now()).all();
       for (const i of inv || []) invites.push({ name: v.lang === "zh" && i.name_zh ? i.name_zh : i.name_en });
     }
     return html(V.consoleHome(v, { s, apps, invites }));
@@ -168,7 +168,11 @@ export async function handleConsole(request, env, p) {
     const inv = await env.DB.prepare("SELECT * FROM app_invites WHERE token_hash = ?").bind(hash).first();
     const app = inv && (await loadApp(env, inv.client_id));
     if (!inv || inv.expires <= now() || !app) return html(V.invitePage(v, { s, error: "expired" }), { status: 404 });
-    if (!s.email || s.email.toLowerCase() !== inv.email) return html(V.invitePage(v, { s, error: "email" }), { status: 403 });
+    // An invitation for another address reads as not valid (it does not
+    // reveal that one exists). For the right address, the identity provider
+    // must be authoritative for its domain and the address verified.
+    if (!s.email || s.email.toLowerCase() !== inv.email) return html(V.invitePage(v, { s, error: "expired" }), { status: 404 });
+    if (verifiedEmail(s) !== inv.email) return html(V.invitePage(v, { s, error: "authority", domain: inv.email.split("@")[1] }), { status: 403 });
     if (m === "GET") return html(V.invitePage(v, { s, invite: inv, app: appEntry(app), ok: mm[1] }));
     if (!(await readPost(request, env, s))) return badRequest(request);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM app_owners WHERE client_id = ?").bind(inv.client_id).first();
@@ -296,7 +300,9 @@ export async function handleApps(request, env, p) {
   const v = view(request);
   if (p === "/apps.json") {
     const { results: banned } = await env.DB.prepare("SELECT domain FROM banned_domains ORDER BY domain").all();
-    return json({ apps: (await publicApps(env)).map(({ client_id, name, domain, protocol, created, status, source }) => ({ client_id, name, domain, protocol, created, status, source })), banned_domains: (banned || []).map((r) => r.domain) }, { cache: "public, max-age=60", cors: true });
+    // Entity IDs held by console SAML applications in any state: a registry pull request may not reuse one.
+    const { results: ents } = await env.DB.prepare("SELECT client_id, json_extract(config, '$.entity_id') AS entity_id FROM apps WHERE protocol = 'saml2'").all();
+    return json({ apps: (await publicApps(env)).map(({ client_id, name, domain, protocol, created, status, source }) => ({ client_id, name, domain, protocol, created, status, source })), banned_domains: (banned || []).map((r) => r.domain), saml_entities: (ents || []).filter((r) => r.entity_id).map((r) => ({ client_id: r.client_id, entity_id: r.entity_id })) }, { cache: "public, max-age=60", cors: true });
   }
   if (p === "/apps") return html(V.appsList(v, { apps: await publicApps(env) }));
   const mm = /^\/apps\/([a-z0-9-]{2,64})$/.exec(p);

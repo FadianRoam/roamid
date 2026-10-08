@@ -222,7 +222,8 @@ claims.validate()
 | 有效期 | 5 分钟 |
 
 - **AuthnRequest 签名**：条目有 `sign_cert` 时，每个 AuthnRequest 必须用它签名：Redirect 绑定签名（`SigAlg` 为 RSA-SHA256 或 RSA-SHA512），或 HTTP-POST 的 enveloped 签名。未签名或签名不符的请求以 `RequestDenied` 拒绝。`SAMLRequest`、`RelayState`、`SigAlg`、`Signature` 各只能出现一次。
-- **IdP 发起**：`https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<值>` 完成登录后，把不带 `InResponseTo` 的 Response 发到第一个 ACS 地址。
+- **实体 ID**：`entity_id` 须为应用 `domain` 或其子域名下的 `https://` 地址（不允许其他协议、端口或用户信息），并在登记表与开发者控制台中唯一。它是 RoamID 签发给该应用的每个断言的 Audience。
+- **IdP 发起**：仅限 `"idp_initiated": true` 的条目（默认 `false`；控制台中为「允许由身份提供方发起的登录」选项）：`https://id.fadianro.am/saml/idp/sso?sp=<client_id>&RelayState=<值>` 完成登录后，把不带 `InResponseTo` 的 Response 发到第一个 ACS 地址。未启用时以 `invalid_request` 拒绝。
 - **被动与强制**：`IsPassive="true"` 等同 OIDC 的 `prompt=none`（此前未选过身份提供方时返回 `NoPassive`）；`ForceAuthn="true"` 转交身份提供方。
 - **错误**以非成功状态的签名 Response 返回，RoamID 错误码在 `StatusMessage` 中（见 [errors.md](../errors.md)）。用户取消登录时为 `Responder`/`AuthnFailed`。
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1 (2026-10-08)
+
+- Co-owner invitations are accepted only with an email address that an identity provider authoritative for its domain asserted as verified; an invitation for another address reads as not valid.
+- SAML applications: `entity_id` is an https URL on the application's domain or a subdomain, unique across the registry and the console (`/apps.json` lists `saml_entities`); IdP-initiated sign-in only with `"idp_initiated": true`.
+
 ## 1.3.0 (2026-10-08)
 
 - `src/platform/`: the replaceable parts of a deployment (head metadata, extra stylesheets, landing heading, sitemap and robots, client address, operator notification, human check on the report form, response headers, extra pages, build marker) with generic defaults. Reports notify an optional `OPERATOR_WEBHOOK_URL`; the report form has no human check by default (rate limits apply).

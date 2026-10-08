@@ -95,6 +95,10 @@
       },
       "description": "AssertionConsumerService URLs (HTTP-POST), compared exactly."
     },
+    "idp_initiated": {
+      "type": "boolean",
+      "description": "Allow IdP-initiated sign-in (/saml/idp/sso?sp=<client_id>). Default false: only SP-initiated requests."
+    },
     "sign_cert": {
       "type": "string",
       "minLength": 100,
