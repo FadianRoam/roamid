@@ -4,13 +4,12 @@
 import { json, html, redirect, now, readForm, CSP } from "../lib/http.js";
 import { randomToken, sha256b64url, sha256hex, safeEqual } from "../lib/b64.js";
 import { allow } from "../lib/ratelimit.js";
-import { clientIp } from "../lib/edgesig.js";
+import { clientIp, notifyOperator, humanCheck } from "../platform/index.js";
 import { getRegistry, resetMemo } from "../registry/store.js";
 import { validateClient } from "../registry/validate.js";
 import { appEntry, loadApp } from "../apps/store.js";
 import { reviewEntry, checkAppDomain, settleStatus } from "../apps/review.js";
 import { LIMITS } from "../apps/checks.js";
-import { notifyOperator } from "../apps/notify.js";
 import { recordDecision, redactReportText } from "../apps/transparency.js";
 import { pickLang, pickTheme, t, localName } from "../ui/i18n.js";
 import { newNonce } from "../lib/http.js";
@@ -322,13 +321,16 @@ export async function createReport(env, r) {
   const ticket = await notifyOperator(env, {
     subject: `RoamID ${r.kind === "appeal" ? "appeal" : "report"}: ${r.target_kind} ${r.target_id} (${r.category})`,
     body: `${r.kind === "appeal" ? "Appeal" : "Report"} ${id}\nTarget: ${r.target_kind} ${r.target_id}\nCategory: ${r.category}\nContact: ${r.contact_email || "-"}\nContext: ${r.context || "-"}\n\n${r.description}\n\nReports: ${env.BASE_URL}/admin/reports#${id}\nTarget: ${env.BASE_URL}/admin/target/${r.target_kind}/${r.target_id}`,
+    link: `${env.BASE_URL}/admin/reports#${id}`,
   });
   if (ticket) await env.DB.prepare("UPDATE reports SET ticket = ? WHERE id = ?").bind(ticket, id).run();
   return id;
 }
 
-export const REPORT_CSP = CSP.replace("script-src 'self'", "script-src 'self' https://verify.yunzheng.space").replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
-  .replace("connect-src 'self'", "connect-src 'self' https://verify.yunzheng.space https://verify.edge.yunzheng.space").replace("img-src 'self' data:", "img-src 'self' data: https://verify.yunzheng.space");
+// The report page's CSP: the base policy plus what the platform's human check needs.
+const addSrc = (csp, dir, hosts) => (hosts && hosts.length ? csp.replace(new RegExp(`${dir} ([^;]*)`), (m, v) => `${dir} ${v} ${hosts.join(" ")}`) : csp);
+const hc = humanCheck.csp || {};
+export const REPORT_CSP = ["script-src", "connect-src", "frame-src", "style-src", "img-src"].reduce((c, d) => addSrc(c, d, hc[d.split("-")[0]]), CSP);
 
 async function targetOf(env, kind, id) {
   const reg = await getRegistry(env);
@@ -342,34 +344,19 @@ async function targetOf(env, kind, id) {
   return null;
 }
 
-async function siteverify(env, token) {
-  if (!token || typeof token !== "string") return "verify_required";
-  if (!env.VERIFY_SECRET) return "verify_unavailable";
-  try {
-    const r = await fetch("https://verify.yunzheng.space/v1/siteverify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: env.VERIFY_SECRET, response: token.slice(0, 4096) }), signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return "verify_unavailable";
-    const j = await r.json();
-    if (!j || j.success !== true || j.action !== "report" || String(j.hostname || "").toLowerCase() !== new URL(env.BASE_URL).hostname) {
-      console.log("[report] verify refused", (j && j["error-codes"] || []).join(","), j && j.action, j && j.hostname);
-      return "verify_failed";
-    }
-    return null;
-  } catch { return "verify_unavailable"; }
-}
-
 export async function handleReport(request, env) {
   const v = view(request);
   const headers = { "Content-Security-Policy": REPORT_CSP };
-  const sitekey = env.VERIFY_SITEKEY || "";
+  const check = humanCheck.field ? humanCheck.widget({ env, lang: v.lang, action: "report" }) || "" : "";
   if (request.method === "GET") {
     const q = new URL(request.url).searchParams;
     const target = q.get("app") ? await targetOf(env, "app", q.get("app")) : q.get("idp") ? await targetOf(env, "idp", q.get("idp")) : null;
     const tx = /^[A-Za-z0-9_-]{10,64}$/.test(q.get("tx") || "") ? q.get("tx") : "";
-    return html(V.reportPage(v, { target, targetName: target && localName(target, v.lang), tx, sitekey }), { headers });
+    return html(V.reportPage(v, { target, targetName: target && localName(target, v.lang), tx, check }), { headers });
   }
   if (request.method !== "POST") return null;
   const f = await readForm(request);
-  if (!f) return html(V.reportPage(v, { sitekey, errors: ["form"] }), { status: 400, headers });
+  if (!f) return html(V.reportPage(v, { check, errors: ["form"] }), { status: 400, headers });
   const ip = await clientIp(request, env);
   const fv = { target_id: String(f.get("target_id") || "").slice(0, 80), category: String(f.get("category") || ""), description: String(f.get("description") || "").trim().slice(0, 4000), contact_email: String(f.get("contact_email") || "").trim().slice(0, 254) };
   let target = null;
@@ -381,11 +368,14 @@ export async function handleReport(request, env) {
   if (!V.CATEGORIES.includes(fv.category)) errors.push("category");
   if (fv.description.length < 10) errors.push("description");
   if (fv.contact_email && !/^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/.test(fv.contact_email)) errors.push("email");
-  const render = (errs, status) => html(V.reportPage(v, { target: tv && target ? target : null, targetName: target && localName(target, v.lang), tx: f.get("tx") || "", sitekey, errors: errs, f: fv }), { status, headers });
+  const render = (errs, status) => html(V.reportPage(v, { target: tv && target ? target : null, targetName: target && localName(target, v.lang), tx: f.get("tx") || "", check, errors: errs, f: fv }), { status, headers });
   if (errors.length) return render(errors, 400);
   if (!(await allow(env, "report", ip))) return render(["rate"], 429);
-  const vr = await siteverify(env, f.get("orbit-verify-response"));
-  if (vr) return render([vr], vr === "verify_unavailable" ? 503 : 403);
+  // The platform's human check, when it has one (off by default: the rate limits apply).
+  if (humanCheck.field) {
+    const ok = await humanCheck.verify(env, f.get(humanCheck.field), ip).catch(() => "verify_unavailable");
+    if (ok !== true) { const code = ["verify_required", "verify_failed", "verify_unavailable"].includes(ok) ? ok : "verify_failed"; return render([code], code === "verify_unavailable" ? 503 : 403); }
+  }
   // Context: the sign-in in progress (which application, which provider), no personal data.
   let context = null;
   const txId = String(f.get("tx") || "");

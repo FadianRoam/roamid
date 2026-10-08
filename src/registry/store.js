@@ -96,6 +96,7 @@ export async function syncRegistry(env, { url = env.REGISTRY_URL } = {}) {
   }
   for (const d of dropped) console.warn("[registry] dropped", d.kind, d.id, d.errors.join("; "));
   await syncLogos(env, url, idps);
+  try { for (const i of idps) await env.DB.prepare("INSERT INTO idp_seen (idp, first_seen) VALUES (?, ?) ON CONFLICT(idp) DO NOTHING").bind(i.id, t).run(); } catch { /* before the migration */ }
   await env.DB.prepare(
     `INSERT INTO registry_cache (id, commit_sha, generated_at, synced_at, checked_at, doc, dropped, last_error)
      VALUES (1, ?, ?, ?, ?, ?, ?, NULL)
@@ -149,4 +150,9 @@ export async function serveLogo(env, path) {
   if (!row) return new Response("not found", { status: 404, headers: { ...base, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   const bytes = Uint8Array.from(atob(row.data), (c) => c.charCodeAt(0));
   return new Response(bytes, { headers: { ...base, "Content-Type": row.type, "Cache-Control": "public, max-age=31536000, immutable", "Content-Disposition": "inline", "Content-Length": String(bytes.length) } });
+}
+
+// id -> first time this instance loaded the provider (unix seconds).
+export async function addedMap(env) {
+  try { const { results } = await env.DB.prepare("SELECT idp, first_seen FROM idp_seen").all(); return Object.fromEntries((results || []).map((r) => [r.idp, r.first_seen])); } catch { return {}; }
 }

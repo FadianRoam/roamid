@@ -83,6 +83,10 @@ test/                           node --test suites with a mock identity provider
 migrations/                     D1 schema
 ```
 
+## Deployment overlay
+
+Production at id.fadianro.am applies a deployment overlay (styling, SEO, platform integrations) through `src/platform/`; this repository runs standalone with the defaults. The module exports `renderHead`, `stylesheets`, `hero`, `sitemap`, `robots`, `clientIp`, `notifyOperator`, `humanCheck`, `responseHeaders`, `pages`, `languagePaths`, `assetSizes` and `buildMarker`; a deployment may replace it at build time with its own implementation of the same exports.
+
 ## Development
 
 Node.js 22.5 or later. No dependencies.

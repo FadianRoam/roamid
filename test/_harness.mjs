@@ -122,13 +122,8 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
       return Response.json({ Status: vals.length ? 0 : 3, Answer: vals.map((v) => ({ name, type: 16, data: `"${v}"` })) });
     }
     if (u.host === "rp.example.test" && u.pathname === "/jwks") return Response.json({ keys: [publicJwk(rpKey)] });
-    if (u.host === "verify.yunzheng.space" && u.pathname === "/v1/siteverify") {
-      const b = await req.json();
-      h.verifyCalls.push(b);
-      return Response.json(b.response === "good-token" ? { success: true, action: "report", hostname: "id.example.test" } : { success: false, "error-codes": ["invalid-input-response"] });
-    }
-    if (u.host === "helpdesk.example.test" && u.pathname === "/api/external/tickets") {
-      h.tickets.push({ key: req.headers.get("X-API-Key"), body: await req.json() });
+    if (u.host === "hooks.example.test" && u.pathname === "/roamid") {
+      h.tickets.push({ body: await req.json() });
       return Response.json({ ok: true, number: `T-${h.tickets.length}` }, { status: 201 });
     }
     if (u.pathname === "/.well-known/roamid-app.txt") {
