@@ -42,7 +42,24 @@ Register `https://id.fadianro.am/client-jwks.json` as the client's JWKS URI. No 
 
 The secret is not stored in the registry. The provider's operator sends it to the RoamID operator through a private channel (see SECURITY.md for contact). It is stored as the Worker secret `IDP_SECRET_<ID>` (the id in upper case, `-` replaced by `_`).
 
-## 3. Email domains
+## 3. Domain and email domains
+
+### 3.1 Domain
+
+Every new entry declares `domain`: the domain of the organization that operates the provider, for example `"example.org"`. It shows that the pull request comes from that operator.
+
+- The issuer (SAML: the metadata URL or SSO URL) and the homepage MUST be on `domain` or a subdomain of it.
+- The domain is proven by the same DNS TXT record as an email domain (section 3.2):
+
+  ```
+  _roamid.example.org.  TXT  "roamid-idp=<id>"
+  ```
+
+- CI refuses a new entry without `domain` or without the record; a maintainer reviews only entries whose domain is proven. RoamID checks the record again every day, like email domains, and `/status` shows its state. Entries listed before `domain` existed keep working and are asked to add it.
+- `domain` does not make the provider authoritative for email addresses; list the domain in `email_domains` as well for that. One TXT record covers both.
+- With a proven `domain`, the operator can register its own sites as RoamID applications under the provider's name ([rp-integration.md](rp-integration.md), automated review).
+
+### 3.2 Email domains
 
 Applications often look up accounts by email address. A provider can assert any address, so RoamID marks an address as verified only when the provider is authoritative for its domain.
 
@@ -80,6 +97,7 @@ See [registry.md](registry.md) and `schema/idp.schema.json`. Example:
   "name": { "en": "Example Community", "zh": "示例社区" },
   "issuer": "https://login.example.org/realms/main",
   "homepage": "https://example.org/",
+  "domain": "example.org",
   "contact": { "github": "example-admin", "email": "admin@example.org" },
   "client_id": "roamid",
   "client_auth": "private_key_jwt",
@@ -101,7 +119,7 @@ Run the registry check locally before opening a pull request:
 node scripts/check.mjs --base origin/main --probe
 ```
 
-It validates the entry, loads the discovery document and checks the TXT records.
+It validates the entry, loads the discovery document and checks the TXT records of `domain` and `email_domains`.
 
 ## 7. SAML 2.0 identity providers
 

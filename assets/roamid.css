@@ -115,6 +115,12 @@ form.act { display: flex; flex-direction: column; gap: 12px; }
 .basis { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .basis legend { padding: 0; margin-bottom: 6px; }
 .form:has(input[name=protocol][value=oidc]:checked) .when-saml, .form:has(input[name=protocol][value=saml2]:checked) .when-oidc { display: none; }
+.idp-pick .mode-hint { display: none; }
+.idp-pick:has([name=idp_mode][value=all]:checked) .mode-hint.all, .idp-pick:has([name=idp_mode][value=only]:checked) .mode-hint.only, .idp-pick:has([name=idp_mode][value=except]:checked) .mode-hint.except { display: block; }
+.idp-pick:has([name=idp_mode][value=all]:checked) .idp-list { display: none; }
+.idp-list { display: grid; gap: 10px; margin-top: 4px; }
+.idp-list .idp-q { max-width: 24em; }
+.idp-list .checks { max-height: 18em; overflow: auto; overscroll-behavior: contain; }
 code.secret { display: block; padding: 10px 12px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); user-select: all; }
 
 /* tables */

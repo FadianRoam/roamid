@@ -7,6 +7,7 @@
     "zh": "示例大学"
   },
   "homepage": "https://example.edu/",
+  "domain": "example.edu",
   "contact": {
     "github": "example-admin",
     "email": "admin@example.edu"

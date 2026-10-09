@@ -36,20 +36,23 @@ function readAppForm(f) {
     name_en: str("name_en", 80), name_zh: str("name_zh", 80), domain: str("domain", 253).toLowerCase().replace(/\.$/, ""), homepage: str("homepage", 300),
     protocol: f.get("protocol") === "saml2" ? "saml2" : "oidc", redirect_uris: lines("redirect_uris"), post_logout_redirect_uris: lines("post_logout_redirect_uris"),
     auth_method: method, jwks_uri: str("jwks_uri", 300), id_token_alg: str("id_token_signed_response_alg", 20) || "RS256", subject_type: f.get("subject_type") === "pairwise" ? "pairwise" : "public",
-    allowed_idps: f.getAll("allowed_idps").map(String).slice(0, 50), entity_id: str("entity_id", 300), acs_urls: lines("acs_urls"), idp_initiated: f.get("idp_initiated") === "yes", sign_cert: str("sign_cert", 8000),
+    idp_mode: ["only", "except"].includes(f.get("idp_mode")) ? f.get("idp_mode") : "all", idp_ids: [...new Set(f.getAll("idp_ids").map(String))].slice(0, 200), entity_id: str("entity_id", 300), acs_urls: lines("acs_urls"), idp_initiated: f.get("idp_initiated") === "yes", sign_cert: str("sign_cert", 8000),
   };
 }
 
 function formFromRow(row) {
   const e = appEntry(row);
   return { name_en: e.name.en, name_zh: e.name.zh || "", domain: e.domain, homepage: e.homepage, protocol: e.protocol, redirect_uris: e.redirect_uris || [], post_logout_redirect_uris: e.post_logout_redirect_uris || [],
-    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", id_token_alg: e.id_token_signed_response_alg || "RS256", subject_type: e.subject_type || "public", allowed_idps: e.allowed_idps || [], entity_id: e.entity_id || "", idp_initiated: e.idp_initiated === true, acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
+    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", id_token_alg: e.id_token_signed_response_alg || "RS256", subject_type: e.subject_type || "public",
+    idp_mode: e.allowed_idps ? "only" : e.excluded_idps ? "except" : "all", idp_ids: e.allowed_idps || e.excluded_idps || [], entity_id: e.entity_id || "", idp_initiated: e.idp_initiated === true, acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
 }
 
 // The registry-shaped entry (for the shared rules) and the stored config.
 function toEntry(clientId, v) {
   const config = { subject_type: v.subject_type };
-  if (v.allowed_idps.length) config.allowed_idps = v.allowed_idps;
+  // "except" with nothing ticked is the same as "all".
+  if (v.idp_mode === "only" && v.idp_ids.length) config.allowed_idps = v.idp_ids;
+  else if (v.idp_mode === "except" && v.idp_ids.length) config.excluded_idps = v.idp_ids;
   if (v.protocol === "saml2") {
     config.entity_id = v.entity_id; config.acs_urls = v.acs_urls; if (v.idp_initiated) config.idp_initiated = true;
     if (v.sign_cert) config.sign_cert = v.sign_cert;
@@ -70,7 +73,9 @@ function toEntry(clientId, v) {
 async function reviewForm(env, reg, clientId, v, { creator, editing } = {}) {
   const { entry, config } = toEntry(clientId, v);
   const errors = validateClient(entry).map((m) => ({ code: "schema", field: m.split(":")[0], message: m }));
-  for (const a of v.allowed_idps) if (!reg.idps.has(a)) errors.push({ code: "schema", field: "allowed_idps", message: `unknown identity provider ${a}` });
+  if (v.idp_mode === "only" && !v.idp_ids.length) errors.push({ code: "idps_pick", field: "allowed_idps", message: "choose at least one identity provider" });
+  if (v.idp_mode !== "all") for (const a of v.idp_ids) if (!reg.idps.has(a)) errors.push({ code: "schema", field: v.idp_mode === "only" ? "allowed_idps" : "excluded_idps", message: `unknown identity provider ${a}` });
+  if (v.idp_mode === "except" && v.idp_ids.length && ![...reg.idps.values()].some((i) => i.status === "active" && !v.idp_ids.includes(i.id))) errors.push({ code: "idps_none", field: "excluded_idps", message: "this would leave no identity provider to offer" });
   if (!errors.length) errors.push(...(await reviewEntry(env, reg, entry)).errors);
   if (v.protocol === "saml2" && v.entity_id && !errors.length) {
     const dupReg = [...reg.clients.values()].some((c) => c.protocol === "saml2" && c.entity_id === v.entity_id);

@@ -22,6 +22,7 @@ export const IDP_FORM = {
   "Name (Chinese) / 名称（中文）": "name_zh",
   "Protocol / 协议": "protocol",
   "Homepage / 主页": "homepage",
+  "Domain / 域名": "domain",
   "Issuer (OIDC)": "issuer",
   "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "client_id",
   "Client authentication (OIDC) / 客户端认证": "client_auth",

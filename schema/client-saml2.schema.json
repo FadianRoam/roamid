@@ -113,7 +113,19 @@
       "items": {
         "type": "string",
         "pattern": "^[a-z0-9-]{2,32}$"
-      }
+      },
+      "description": "Offer only these identity providers. Providers added to the registry later are not offered until listed here. Not together with excluded_idps."
+    },
+    "excluded_idps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]{2,32}$"
+      },
+      "description": "Offer every active identity provider except these. Providers added to the registry later are offered automatically. Not together with allowed_idps."
     },
     "subject_type": {
       "type": "string",

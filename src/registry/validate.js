@@ -110,6 +110,7 @@ export function validateIdp(entry) {
   errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
   if (entry.protocol === "oidc" && !entry.scopes.includes("openid")) errs.push("scopes: must include openid");
   if (entry.client_assertion_aud && entry.client_auth !== "private_key_jwt") errs.push("client_assertion_aud: only with client_auth private_key_jwt");
+  errs.push(...onDomain(entry, ["issuer", "homepage"]));
   const doms = (entry.email_domains || []).map(domainBase);
   if (new Set(doms).size !== doms.length) errs.push("email_domains: a domain is listed twice");
   return errs;
@@ -130,8 +131,23 @@ function validateSamlIdp(entry) {
     if (!entry.certs) errs.push("certs: required without metadata_url");
   }
   (entry.certs || []).forEach((c, i) => { if (!CERT_RE.test(c)) errs.push(`certs[${i}]: not a certificate`); });
+  errs.push(...onDomain(entry, ["homepage", "metadata_url", "sso_url"]));
   const doms = (entry.email_domains || []).map(domainBase);
   if (new Set(doms).size !== doms.length) errs.push("email_domains: a domain is listed twice");
+  return errs;
+}
+
+export const inDomain = (host, domain) => host === domain || host.endsWith(`.${domain}`);
+
+// An entry with a `domain`: the listed URL fields are on it or a subdomain.
+function onDomain(entry, fields) {
+  if (!entry.domain) return [];
+  const errs = [];
+  for (const f of fields) {
+    if (!entry[f]) continue;
+    const h = parseUrl(entry[f])?.hostname.toLowerCase();
+    if (h && !inDomain(h, entry.domain)) errs.push(`${f}: the host must be ${entry.domain} or a subdomain of it (domain)`);
+  }
   return errs;
 }
 
@@ -169,7 +185,14 @@ export function emailInDomain(email, d) {
 
 export function validateClient(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return ["entry: must be an object"];
-  if (entry.protocol === "saml2") return validateSamlClient(entry);
+  const errs = entry.protocol === "saml2" ? validateSamlClient(entry) : validateOidcClient(entry);
+  // An allow list (only these, new providers not offered) or an exclude
+  // list (all but these, new providers offered), never both.
+  if (entry.allowed_idps && entry.excluded_idps) errs.push("excluded_idps: not together with allowed_idps; use one of them");
+  return errs;
+}
+
+function validateOidcClient(entry) {
   const errs = checkSchema(clientSchema, entry);
   if (errs.length) return errs;
   errs.push(...httpsUrl(entry.homepage, "homepage", { allowQuery: true }));
@@ -211,8 +234,8 @@ export function sectorOf(client) {
 
 // Load a registry document entry by entry. An invalid entry is dropped with
 // its reasons; the rest is kept. Cross-entry rules (unique ids and issuers,
-// allowed_idps that exist) are applied in file order: the first holder of an
-// id wins. `strict` (CI) reports unknown allowed_idps as errors; at run time
+// allowed_idps / excluded_idps that exist) are applied in file order: the first
+// holder of an id wins. `strict` (CI) reports unknown ids in them as errors; at run time
 // they are only filtered out.
 export function validateRegistry(doc, { strict = false } = {}) {
   const dropped = [];
@@ -242,8 +265,8 @@ export function validateRegistry(doc, { strict = false } = {}) {
     if (!errs.length && cids.has(e.client_id)) errs.push("client_id: duplicate");
     if (!errs.length && (/^app-/.test(e.client_id) || e.client_id === "roamid-console" || e.client_id === "roamid-test")) errs.push("client_id: reserved (app-… identifiers belong to console applications)");
     if (!errs.length && e.protocol === "saml2" && spIds.has(e.entity_id)) errs.push("entity_id: already registered by another entry");
-    if (!errs.length && strict && e.allowed_idps) {
-      for (const a of e.allowed_idps) if (!ids.has(a)) errs.push(`allowed_idps: unknown identity provider ${a}`);
+    if (!errs.length && strict) {
+      for (const k of ["allowed_idps", "excluded_idps"]) for (const a of e[k] || []) if (!ids.has(a)) errs.push(`${k}: unknown identity provider ${a}`);
     }
     if (errs.length) { dropped.push({ kind: "client", id, errors: errs }); continue; }
     cids.add(e.client_id); if (e.protocol === "saml2") spIds.add(e.entity_id); clients.push(e);

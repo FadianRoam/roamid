@@ -42,7 +42,24 @@
 
 密钥不进登记表。提供方运营者经私下渠道交给 RoamID 运营者（联系方式见 SECURITY.md），存为 Worker secret `IDP_SECRET_<ID>`（id 大写，`-` 换成 `_`）。
 
-## 3. 邮箱域名
+## 3. 域名与邮箱域名
+
+### 3.1 域名
+
+每个新条目都要声明 `domain`：运营该提供方的组织的域名，例如 `"example.org"`。它用来表明拉取请求来自该运营方。
+
+- issuer（SAML：元数据地址或 SSO 地址）与主页必须在 `domain` 或其子域名之下。
+- 域名用与邮箱域名相同的 DNS TXT 记录证明（第 3.2 节）：
+
+  ```
+  _roamid.example.org.  TXT  "roamid-idp=<id>"
+  ```
+
+- 新条目缺少 `domain` 或缺少该记录时 CI 拒绝；维护者只审核域名已证明的条目。RoamID 与邮箱域名一样每天复查该记录，`/status` 显示其状态。在 `domain` 推出之前登记的条目继续可用，并会被要求补上。
+- `domain` 不代表对邮箱地址有权威；需要时把该域名同时列入 `email_domains`。一条 TXT 记录同时覆盖两者。
+- `domain` 证明后，运营方可以用提供方的名称把自己的网站登记为 RoamID 应用（见 [rp-integration.md](rp-integration.md) 自动审核）。
+
+### 3.2 邮箱域名
 
 应用常按邮箱地址查找账户。提供方可以声明任意地址，因此 RoamID 只在提供方对地址所在域名有权威时才把地址标为已验证。
 

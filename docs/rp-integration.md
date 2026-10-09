@@ -35,7 +35,8 @@ Two ways, with the same automated review (section 12):
 | `token_endpoint_auth_method` | `none`, `private_key_jwt`, `client_secret_basic` or `client_secret_post`. |
 | `client_secret_sha256` | For `client_secret_*`: generate at least 32 random bytes yourself and publish only the SHA-256 (hex) of the secret string. Example: `openssl rand -base64 32 \| tr -d '\n' > secret.txt; shasum -a 256 secret.txt`. Do not commit the secret. |
 | `jwks_uri` | For `private_key_jwt`: https URL of your public keys (RS256, PS256 or ES256). |
-| `allowed_idps` | Optional list of identity provider ids. Without it, every active provider is offered. |
+| `allowed_idps` | Optional. Offer only these identity providers. Providers added to the registry later are not offered until listed here. |
+| `excluded_idps` | Optional. Offer every active identity provider except these; providers added later are offered automatically. Not together with `allowed_idps`. Without either, every active provider is offered. |
 | `subject_type` | `public` (default) or `pairwise`. |
 | `id_token_signed_response_alg` | Optional. `RS256` (default) or `ES256`: the algorithm of the ID tokens this application receives. |
 | `domain` | The application's domain (section 12). Required for an automatic merge. Shown in the picker. |
@@ -279,7 +280,7 @@ Applications are not reviewed by a person. An application goes live when it pass
 | Name | no domain name in it (`example.com`) | `name_domain` |
 | Name | no Latin mixed with Cyrillic or Greek letters | `name_mixed_script` |
 | Name | not too close to a reserved name ([policy/reserved-names.json](../policy/reserved-names.json)), compared by confusable skeleton (`0`→`o`, `rn`→`m`, Cyrillic `о`→`o`, …), as a part of the name for names of five or more characters, as a whole word for shorter ones | `name_reserved` |
-| Name | not the same skeleton as another identity provider or application | `name_taken` |
+| Name | not the same skeleton as another identity provider or application. Exception: an application whose `domain` is exactly an identity provider's proven `domain` (not a subdomain) may use that provider's name, and applications on that domain do not block each other's names; it is the same operator. Callbacks may still be on subdomains | `name_taken` |
 | Domain | a host name such as `example.com`; not an IP address | `domain_invalid` |
 | Domain | not the domain (or a subdomain of the domain) of a banned application | `domain_banned` |
 | Domain and URLs | no host on the public block lists RoamID loads daily (URLhaus, OpenPhish) | `reputation` |

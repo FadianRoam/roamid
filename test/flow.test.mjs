@@ -319,3 +319,14 @@ test("logos: the sync downloads, re-checks and serves them with fixed headers; a
     assert.ok(!list.find((i) => i.id === "other").logo, "the refused logo is dropped from the entry");
   }
 });
+
+test("/idps lists an identity provider paused by the operator as not yet available; a retired one stays hidden", async () => {
+  const h = await setup({ idps: { good: "idp.example.test", off: "off.example.test", wait: "wait.example.test" } });
+  h.registry.idps[1].status = "disabled";
+  await h.env.DB.prepare("INSERT INTO idp_overrides (idp, disabled, reason, by_sub, at) VALUES ('wait', 1, 'secret pending', 'op', 1)").run();
+  const page = await (await h.request("/idps")).text();
+  assert.match(page, /IdP wait[\s\S]*Not yet available/);
+  assert.doesNotMatch(page, /IdP off/);
+  const r = await login(h, { pk: await pkce(), pick: false });
+  assert.doesNotMatch(await r.picker.text(), /IdP wait/, "a paused provider is not offered in the picker");
+});

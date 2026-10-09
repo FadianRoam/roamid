@@ -1,6 +1,7 @@
-// Email domain authority (docs/idp-requirements.md, "Email domains").
+// Domain proofs (docs/idp-requirements.md, "Domain" and "Email domains").
 //
-// An IdP entry lists email_domains. Each is proven by a DNS TXT record
+// An IdP entry has a `domain` (who operates it) and may list email_domains
+// (which addresses it is authoritative for). Each is proven by a DNS TXT record
 // _roamid.<domain> whose value is roamid-idp=<idp id>. CI checks the record
 // on the pull request; the Worker checks new domains as soon as the registry
 // lists them and every domain again once a day. A domain whose record has
@@ -47,7 +48,9 @@ export async function proveDomain(domain, idpId) {
 export async function checkDomainProofs(env, reg, { force = false, max = 50 } = {}) {
   const t = now();
   const want = [];
-  for (const idp of reg.idps.values()) for (const d of idp.email_domains || []) want.push({ domain: d, idp: idp.id });
+  for (const idp of reg.idps.values()) {
+    for (const d of new Set([...(idp.domain ? [idp.domain] : []), ...(idp.email_domains || [])])) want.push({ domain: d, idp: idp.id });
+  }
   const { results } = await env.DB.prepare("SELECT * FROM domain_proofs").all();
   const rows = new Map((results || []).map((r) => [`${r.domain}|${r.idp}`, r]));
   const keep = new Set(want.map((w) => `${w.domain}|${w.idp}`));
@@ -86,6 +89,16 @@ export function proofState(row, t = now()) {
   if (!row || !row.verified_at) return "unverified";
   if (!row.failing_since) return "verified";
   return t - row.failing_since < GRACE ? "grace" : "lost";
+}
+
+// IdP id -> its `domain`, for the providers whose domain is proven now.
+export async function provenIdpDomains(env, reg) {
+  const { results } = await env.DB.prepare("SELECT * FROM domain_proofs").all();
+  const t = now();
+  const ok = new Set((results || []).filter((r) => ["verified", "grace"].includes(proofState(r, t))).map((r) => `${r.domain}|${r.idp}`));
+  const out = new Map();
+  for (const i of reg.idps.values()) if (i.domain && ok.has(`${i.domain}|${i.id}`)) out.set(i.id, i.domain);
+  return out;
 }
 
 // The declared domains of `idp` that are authoritative now.
