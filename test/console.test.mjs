@@ -592,3 +592,10 @@ test("verifiedEmail: only an authoritative and verified address counts", async (
   assert.equal(verifiedEmail({ email: null, email_verified: 1, email_authority: "authoritative" }), null);
   assert.equal(verifiedEmail(null), null);
 });
+
+test("/admin leads to the operator queue", async () => {
+  const h = await setup();
+  const r = await h.request("/admin");
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get("Location"), "/admin/reports");
+});
