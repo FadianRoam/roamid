@@ -53,11 +53,17 @@ export function mixedScripts(s) {
 const err = (code, field, message) => ({ code, field, message });
 
 // `names` holds the names in use. An identity provider's entry carries
-// `owner`, its proven domain: an application on that domain (or a
-// subdomain) belongs to the same operator and may use the provider's name,
-// so a provider can register its own sites as RoamID applications. The
-// application itself becomes active only after proving its domain.
+// `owner`, its proven domain (DNS TXT). An application whose domain is
+// exactly that domain belongs to the same operator and may use the
+// provider's name, so a provider can register its own sites as RoamID
+// applications (their callbacks may still be on subdomains). Exactly, not
+// a subdomain: a subdomain can be someone else's (hosting, user pages) and
+// an application's own proof may be a file on its web server. Applications
+// on that domain do not block each other's names either, so an unproven
+// application cannot hold the name against the operator; it becomes active
+// only after proving the domain.
 export function checkName(name, field, { names = [], self = null, reserved = RESERVED, domain = null } = {}) {
+  const own = !!domain && names.some((o) => o.owner && o.owner === domain);
   const out = [];
   const n = String(name || "").trim();
   if (n.length < LIMITS.nameMin || n.length > LIMITS.nameMax) out.push(err("name_length", field, `between ${LIMITS.nameMin} and ${LIMITS.nameMax} characters`));
@@ -74,7 +80,7 @@ export function checkName(name, field, { names = [], self = null, reserved = RES
   }
   for (const o of names) {
     if (o.id === self) continue;
-    if (o.owner && domain && inDomain(domain, o.owner)) continue;
+    if (own && (o.owner === domain || (!o.owner && o.domain === domain))) continue;
     if (skeleton(o.name) === sk) { out.push(err("name_taken", field, `too close to the name of ${o.id}`)); break; }
   }
   return out;

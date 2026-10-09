@@ -42,10 +42,16 @@ test("names: a provider's proven domain lets its own applications use its name",
   const names = [{ id: "jyl", name: "JianyueLab Account", owner: "jianyuelab.co" }];
   const codes = (domain, list = names) => checkName("JianyueLab Account", "name.en", { names: list, domain }).map((e) => e.code);
   assert.deepEqual(codes("jianyuelab.co"), []);
-  assert.deepEqual(codes("forum.jianyuelab.co"), [], "a subdomain is the same operator");
+  assert.deepEqual(codes("forum.jianyuelab.co"), ["name_taken"], "a subdomain can be someone else's (hosting, user pages)");
   assert.deepEqual(codes("jianyuelab.co.evil.test"), ["name_taken"]);
   assert.deepEqual(codes("notjianyuelab.co"), ["name_taken"]);
   assert.deepEqual(codes("jianyuelab.co", [{ id: "jyl", name: "JianyueLab Account" }]), ["name_taken"], "without a proven domain there is no exemption");
+  // An unproven application on that domain cannot hold the name against the operator.
+  const squat = [...names, { id: "app-squat", name: "JianyueLab Account", domain: "jianyuelab.co" }];
+  assert.deepEqual(codes("jianyuelab.co", squat), []);
+  assert.deepEqual(codes("other.example", squat), ["name_taken"]);
+  // Two applications on an unrelated domain still block each other.
+  assert.deepEqual(checkName("Same Name", "name.en", { names: [{ id: "a1", name: "Same Name", domain: "x.example" }], domain: "x.example" }).map((e) => e.code), ["name_taken"]);
 });
 
 async function consoleAs(h, user) {

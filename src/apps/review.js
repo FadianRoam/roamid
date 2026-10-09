@@ -47,9 +47,9 @@ export async function namesInUse(env, reg) {
   const out = [];
   const proven = await provenIdpDomains(env, reg);
   for (const i of reg.idps.values()) for (const n of [i.name.en, i.name.zh]) if (n) out.push({ id: i.id, name: n, ...(proven.has(i.id) ? { owner: proven.get(i.id) } : {}) });
-  for (const c of reg.clients.values()) for (const n of [c.name.en, c.name.zh]) if (n) out.push({ id: c.client_id, name: n });
-  const { results } = await env.DB.prepare("SELECT client_id, name_en, name_zh FROM apps WHERE status != 'banned'").all();
-  for (const r of results || []) for (const n of [r.name_en, r.name_zh]) if (n) out.push({ id: r.client_id, name: n });
+  for (const c of reg.clients.values()) for (const n of [c.name.en, c.name.zh]) if (n) out.push({ id: c.client_id, name: n, domain: c.domain || null });
+  const { results } = await env.DB.prepare("SELECT client_id, name_en, name_zh, domain FROM apps WHERE status != 'banned'").all();
+  for (const r of results || []) for (const n of [r.name_en, r.name_zh]) if (n) out.push({ id: r.client_id, name: n, domain: r.domain || null });
   return out;
 }
 

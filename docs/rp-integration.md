@@ -280,7 +280,7 @@ Applications are not reviewed by a person. An application goes live when it pass
 | Name | no domain name in it (`example.com`) | `name_domain` |
 | Name | no Latin mixed with Cyrillic or Greek letters | `name_mixed_script` |
 | Name | not too close to a reserved name ([policy/reserved-names.json](../policy/reserved-names.json)), compared by confusable skeleton (`0`→`o`, `rn`→`m`, Cyrillic `о`→`o`, …), as a part of the name for names of five or more characters, as a whole word for shorter ones | `name_reserved` |
-| Name | not the same skeleton as another identity provider or application. Exception: an application whose domain is an identity provider's proven `domain` (or a subdomain of it) may use that provider's name; it is the same operator | `name_taken` |
+| Name | not the same skeleton as another identity provider or application. Exception: an application whose `domain` is exactly an identity provider's proven `domain` (not a subdomain) may use that provider's name, and applications on that domain do not block each other's names; it is the same operator. Callbacks may still be on subdomains | `name_taken` |
 | Domain | a host name such as `example.com`; not an IP address | `domain_invalid` |
 | Domain | not the domain (or a subdomain of the domain) of a banned application | `domain_banned` |
 | Domain and URLs | no host on the public block lists RoamID loads daily (URLhaus, OpenPhish) | `reputation` |

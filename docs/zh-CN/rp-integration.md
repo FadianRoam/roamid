@@ -253,7 +253,7 @@ claims.validate()
 | 名称 | 不含域名（如 `example.com`） | `name_domain` |
 | 名称 | 不混用拉丁字母与西里尔或希腊字母 | `name_mixed_script` |
 | 名称 | 不与保留名称（[policy/reserved-names.json](../../policy/reserved-names.json)）过于相近：按形近字骨架比较（`0`→`o`、`rn`→`m`、西里尔 `о`→`o` 等），五个字符及以上的保留名称作为名称的一部分比较，较短的按整词比较 | `name_reserved` |
-| 名称 | 骨架不与其他身份提供方或应用相同。例外：应用的域名是某个身份提供方已证明的 `domain`（或其子域名）时，可以使用该提供方的名称，二者属于同一运营方 | `name_taken` |
+| 名称 | 骨架不与其他身份提供方或应用相同。例外：应用的 `domain` 与某个身份提供方已证明的 `domain` 完全相同（子域名不算）时，可以使用该提供方的名称，该域名下的应用之间名称也不互相阻挡；二者属于同一运营方。回调地址仍可在子域名上 | `name_taken` |
 | 域名 | 主机名，如 `example.com`；不能是 IP 地址 | `domain_invalid` |
 | 域名 | 不是被封禁应用的域名（或其子域名） | `domain_banned` |
 | 域名与地址 | 主机不在 RoamID 每天载入的公开黑名单（URLhaus、OpenPhish）中 | `reputation` |
