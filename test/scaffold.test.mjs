@@ -24,7 +24,7 @@ test("scaffold: the built entries pass the schema; offline review rules apply", 
   assert.ok(!("client_secret" in app.entry));
   const saml = buildClient({ client_id: "my-wiki", name_en: "My Wiki", domain: "example.org", homepage: "https://wiki.example.org/", protocol: "saml2", entity_id: "https://wiki.example.org/saml", acs_urls: "https://wiki.example.org/acs", github: "dev", email: "dev@example.org" });
   assert.deepEqual(saml.errors, []);
-  const idp = buildIdp({ id: "my-idp", name_en: "My IdP", protocol: "oidc", issuer: "https://login.example.org", homepage: "https://example.org/", client_id: "roamid", client_auth: "private_key_jwt", email_domains: "example.org", github: "dev", email: "dev@example.org" });
+  const idp = buildIdp({ id: "my-idp", name_en: "My IdP", protocol: "oidc", issuer: "https://login.example.org", homepage: "https://example.org/", domain: "example.org", client_id: "roamid", client_auth: "private_key_jwt", email_domains: "example.org", github: "dev", email: "dev@example.org" });
   assert.deepEqual(idp.errors, []);
   assert.ok(buildClient({ client_id: "app-x1", name_en: "Gооgle", domain: "x.org", homepage: "https://x.org/", redirect_uris: "https://evil.example/cb", github: "d", email: "d@x.org" }).errors.length >= 3);
 });
@@ -127,7 +127,7 @@ test("issue -> refused: pasted secret (redacted, nothing committed), client secr
 });
 
 test("issue -> identity provider: PR for human review with the redirect URI and TXT records", async () => {
-  const body = Object.entries({ "id": "issue-idp", "Name (English) / 名称（英文）": "Issue IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Email domains / 邮箱域名": "example.org", "Contact email / 联系邮箱": "ops@example.org" }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
+  const body = Object.entries({ "id": "issue-idp", "Name (English) / 名称（英文）": "Issue IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Domain / 域名": "example.org", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Email domains / 邮箱域名": "example.org", "Contact email / 联系邮箱": "ops@example.org" }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
   const g = ghMock();
   const r = await handleIssue(issue(body, { labels: [{ name: "registration" }, { name: "identity-provider" }] }), { api: g.api, repo: "FadianRoam/roamid", log() {}, sleep: async () => {} });
   assert.equal(r.action, "opened");
@@ -140,7 +140,7 @@ test("issue -> identity provider with a logo attachment: checked like CI, commit
   const { readFileSync } = await import("node:fs");
   const fx = (f) => new Uint8Array(readFileSync(new URL(`./fixtures/logos/${f}`, import.meta.url)));
   const URL1 = "https://github.com/user-attachments/assets/0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
-  const body = (logo, rights = "- [X] The logo is the provider's own mark; I have the right to use it.") => Object.entries({ "id": "logo-idp", "Name (English) / 名称（英文）": "Logo IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Contact email / 联系邮箱": "ops@example.org", "Logo (optional) / 标志（可选）": logo, "Logo rights / 标志使用权": rights }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
+  const body = (logo, rights = "- [X] The logo is the provider's own mark; I have the right to use it.") => Object.entries({ "id": "logo-idp", "Name (English) / 名称（英文）": "Logo IdP", "Protocol / 协议": "oidc", "Homepage / 主页": "https://example.org/", "Domain / 域名": "example.org", "Issuer (OIDC)": "https://login.example.org", "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID": "roamid", "Client authentication (OIDC) / 客户端认证": "private_key_jwt", "Scopes (OIDC)": "openid email profile", "Contact email / 联系邮箱": "ops@example.org", "Logo (optional) / 标志（可选）": logo, "Logo rights / 标志使用权": rights }).map(([k, v]) => `### ${k}\n\n${v}`).join("\n\n");
   const labels = [{ name: "registration" }, { name: "identity-provider" }];
   const puts = (g) => g.calls.filter(([m, p]) => m === "PUT" && p.startsWith("/contents/")).map(([, p]) => p);
   const comments = (g) => g.calls.filter(([m, p]) => m === "POST" && p === "/issues/9/comments").map((c) => c[2].body).join("\n");

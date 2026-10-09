@@ -54,6 +54,7 @@ if (kind === "app") {
   f.name_zh = await ask("Name (Chinese, optional)");
   f.protocol = await ask("Protocol: oidc or saml2", "oidc");
   f.homepage = await ask("Homepage");
+  f.domain = await ask("Your domain (the issuer or SAML endpoints and the homepage are on it; proven by DNS TXT)");
   if (f.protocol === "saml2") {
     f.metadata_url = await ask("Metadata URL (https; empty to give entity ID, SSO URL and certificate)");
     if (!f.metadata_url) { f.entity_id = await ask("Entity ID"); f.sso_url = await ask("HTTP-Redirect SSO URL"); f.certs = await ask("Signing certificate, base64 on one line"); }

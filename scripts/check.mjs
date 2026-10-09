@@ -6,8 +6,9 @@
 // 1. file names: registry/idps/<id>.json, registry/clients/<client_id>.json
 // 2. every entry against the schemas and rules (src/registry/validate.js)
 // 3. identifiers are permanent: nothing on --base may be removed or renamed
-// 4. --probe: for identity providers added or changed against --base, load
-//    the discovery document and check the email domain TXT proofs
+// 4. an identity provider added against --base declares its `domain`
+// 5. --probe: for identity providers added or changed against --base, load
+//    the discovery document and check the domain and email domain TXT proofs
 // Exit status 1 when anything fails. --summary appends a Markdown report
 // (GitHub job summary).
 import { appendFileSync } from "node:fs";
@@ -40,6 +41,7 @@ for (const d of dropped) errors.push(`${d.kind} ${d.id}: ${d.errors.join("; ")}`
 report.push(`Entries: ${idps.length} identity providers, ${clients.length} clients.`);
 
 let changed = idps;
+let added = [];
 let beforeClients = new Map();
 if (base) {
   const baseFiles = readRevision(base);
@@ -49,9 +51,15 @@ if (base) {
     errors.push(...checkImmutable(idsOf(baseFiles), idsOf(files)));
     const before = new Map(baseFiles.filter((f) => f.kind === "idps" && f.json).map((f) => [f.json.id, JSON.stringify(f.json)]));
     changed = idps.filter((i) => before.get(i.id) !== JSON.stringify(i));
+    added = idps.filter((i) => !before.has(i.id));
     beforeClients = new Map(baseFiles.filter((f) => f.kind === "clients" && f.json).map((f) => [f.json.client_id, JSON.stringify(f.json)]));
   }
 }
+
+// The operator's domain: required for a new provider; an older entry without
+// one is reported and keeps working until it adds one.
+for (const idp of added) if (!idp.domain && idp.status === "active") errors.push(`idp ${idp.id}: domain: required; the provider's own domain, proven by DNS TXT _roamid.<domain> "roamid-idp=${idp.id}"`);
+for (const idp of changed) if (!idp.domain && !added.includes(idp)) report.push(`- ${idp.id}: no domain declared yet (required for new providers; add "domain" and its TXT record)`);
 
 if (probe) {
   for (const idp of changed) {
@@ -70,12 +78,13 @@ if (probe) {
         errors.push(`idp ${idp.id}: discovery ${url}: ${e.message}`);
       }
     }
-    for (const d of idp.email_domains || []) {
+    for (const d of new Set([...(idp.domain ? [idp.domain] : []), ...(idp.email_domains || [])])) {
+      const what = d === idp.domain ? ((idp.email_domains || []).includes(d) ? "domain and email domain" : "domain") : "email domain";
       try {
-        if (await proveDomain(d, idp.id)) report.push(`- ${idp.id}: email domain ${d} proven (${proofName(d)} TXT ${proofValue(idp.id)})`);
-        else errors.push(`idp ${idp.id}: email domain ${d}: TXT ${proofName(d)} does not contain ${proofValue(idp.id)}`);
+        if (await proveDomain(d, idp.id)) report.push(`- ${idp.id}: ${what} ${d} proven (${proofName(d)} TXT ${proofValue(idp.id)})`);
+        else errors.push(`idp ${idp.id}: ${what} ${d}: TXT ${proofName(d)} does not contain ${proofValue(idp.id)}`);
       } catch (e) {
-        errors.push(`idp ${idp.id}: email domain ${d}: DNS lookup failed: ${e.message}`);
+        errors.push(`idp ${idp.id}: ${what} ${d}: DNS lookup failed: ${e.message}`);
       }
     }
   }

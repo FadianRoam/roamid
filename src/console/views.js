@@ -5,6 +5,7 @@
 import { t, localName } from "../ui/i18n.js";
 import { contentPage, esc, hiddenFields, icon, REGISTRY_DOCS } from "../ui/pages.js";
 import { humanCheck } from "../platform/index.js";
+import { searchText } from "../ui/list.js";
 
 const STATUS_CLASS = { active: "ok", development: "warn", unverified: "warn", suspended: "bad", banned: "bad" };
 export const appStatus = (a) => (a.status === "active" && !a.domain_verified ? "unverified" : a.status);
@@ -53,7 +54,10 @@ export function appForm(v, { s, f = {}, errors = [], idps = [], action, title, s
   const lines = (k) => esc(Array.isArray(f[k]) ? f[k].join("\n") : f[k] ?? "");
   const proto = f.protocol === "saml2" ? "saml2" : "oidc";
   const method = f.auth_method || "client_secret_basic";
-  const allowed = new Set(Array.isArray(f.allowed_idps) ? f.allowed_idps : []);
+  const idpMode = ["only", "except"].includes(f.idp_mode) ? f.idp_mode : "all";
+  const picked = new Set(Array.isArray(f.idp_ids) ? f.idp_ids : []);
+  // Selected ids that are no longer active stay visible (and selected), so saving does not drop them silently.
+  const pickable = [...idps, ...[...picked].filter((id) => !idps.some((i) => i.id === id)).map((id) => ({ id, name: { en: id } }))];
   const field = (name, label, input, hint) => `<label class="field"><span class="lbl">${esc(label)}</span>${input}${hint ? `<span class="hint">${esc(hint)}</span>` : ""}</label>`;
   const opt = (value, label, cur) => `<option value="${esc(value)}"${value === cur ? " selected" : ""}>${esc(label)}</option>`;
   const body = `<h1 class="title">${esc(title)}</h1>${userBar(v.lang, s)}
@@ -79,7 +83,11 @@ ${field("acs_urls", t(v.lang, "c_f_acs"), `<textarea name="acs_urls" rows="2" sp
 ${field("sign_cert", t(v.lang, "c_f_sign_cert"), `<textarea name="sign_cert" rows="3" spellcheck="false">${val("sign_cert")}</textarea>`, t(v.lang, "c_f_optional"))}
 </div>
 ${field("subject_type", t(v.lang, "c_f_subject"), `<select name="subject_type">${opt("public", t(v.lang, "c_subject_public"), f.subject_type || "public")}${opt("pairwise", t(v.lang, "c_subject_pairwise"), f.subject_type || "public")}</select>`)}
-<fieldset class="field"><legend class="lbl">${esc(t(v.lang, "c_f_allowed"))}</legend><span class="hint">${esc(t(v.lang, "c_f_allowed_hint"))}</span><div class="checks">${idps.map((i) => `<label><input type="checkbox" name="allowed_idps" value="${esc(i.id)}"${allowed.has(i.id) ? " checked" : ""}> ${esc(localName(i, v.lang))}</label>`).join("")}</div></fieldset>`)}
+<fieldset class="field idp-pick"><legend class="lbl">${esc(t(v.lang, "c_f_allowed"))}</legend>
+<div class="seg-radio" role="radiogroup">${["all", "only", "except"].map((m) => `<label><input type="radio" name="idp_mode" value="${m}"${idpMode === m ? " checked" : ""}> ${esc(t(v.lang, `c_idp_${m}`))}</label>`).join("")}</div>
+${["all", "only", "except"].map((m) => `<span class="hint mode-hint ${m}">${esc(t(v.lang, `c_idp_${m}_hint`))}</span>`).join("")}
+<div class="idp-list"><input type="search" class="idp-q" placeholder="${esc(t(v.lang, "c_idp_search"))}" aria-label="${esc(t(v.lang, "c_idp_search"))}" autocomplete="off" spellcheck="false">
+<div class="checks">${pickable.map((i) => `<label data-q="${esc(searchText(i))}"><input type="checkbox" name="idp_ids" value="${esc(i.id)}"${picked.has(i.id) ? " checked" : ""}> ${esc(localName(i, v.lang))}</label>`).join("")}</div></div></fieldset>`)}
 <div class="btnrow"><button class="pill" type="submit" id="save-app">${esc(submit)}</button><a class="pill ghost" href="/console">${esc(t(v.lang, "c_cancel"))}</a></div>
 </form>`;
   return page(v, title, body);
