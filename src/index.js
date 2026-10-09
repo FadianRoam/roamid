@@ -210,7 +210,7 @@ export async function handle(request, env, ctx) {
     const fx = fixtureCount(env, url);
     if (fx != null) { const f = fixtureIdps(fx); return html(idpsPage({ ...v, idps: f.idps, health: f.health, added: f.added, sort: url.searchParams.get("sort"), fixture: fx }), { nonce: v.nonce }); }
     const reg = await getRegistry(env);
-    return html(idpsPage({ ...v, idps: [...reg.idps.values()].filter((i) => i.status !== "disabled"), health: await healthMap(env), added: await addedMap(env), sort: url.searchParams.get("sort") }), { nonce: v.nonce });
+    return html(idpsPage({ ...v, idps: [...reg.idps.values()].filter((i) => i.status !== "disabled" || i.override), health: await healthMap(env), added: await addedMap(env), sort: url.searchParams.get("sort") }), { nonce: v.nonce });
   }
   if (p === "/fixture/picker" && fixtureCount(env, url) != null) {
     const n = fixtureCount(env, url), f = fixtureIdps(n);
