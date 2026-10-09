@@ -37,6 +37,7 @@ Two ways, with the same automated review (section 12):
 | `jwks_uri` | For `private_key_jwt`: https URL of your public keys (RS256, PS256 or ES256). |
 | `allowed_idps` | Optional list of identity provider ids. Without it, every active provider is offered. |
 | `subject_type` | `public` (default) or `pairwise`. |
+| `id_token_signed_response_alg` | Optional. `RS256` (default) or `ES256`: the algorithm of the ID tokens this application receives. |
 | `domain` | The application's domain (section 12). Required for an automatic merge. Shown in the picker. |
 
 ## 2. Endpoints
@@ -90,7 +91,7 @@ Response: `access_token` (opaque, 1 hour), `token_type` `Bearer`, `expires_in`, 
 
 ## 5. ID token and claims
 
-The ID token is signed with ES256; the keys are at `/jwks.json` and carry a `kid`. Lifetime 1 hour. It contains `iss`, `aud`, `azp`, `iat`, `exp`, `nonce` (when sent), `at_hash` and:
+The ID token is signed with RS256, or with ES256 when the entry sets `"id_token_signed_response_alg": "ES256"` (in the console: ID token signature). The public keys of both algorithms are at `/jwks.json`, each with `kid`, `alg` and `use: "sig"`; select the key by the token's `kid`. Lifetime 1 hour. It contains `iss`, `aud`, `azp`, `iat`, `exp`, `nonce` (when sent), `at_hash` and:
 
 | Claim | Scope | Value |
 |---|---|---|
