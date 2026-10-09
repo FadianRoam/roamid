@@ -60,7 +60,7 @@ export function clientInstructions(e) {
   ];
 }
 
-// fields: id, name_en, name_zh, protocol, issuer, homepage, client_id, client_auth,
+// fields: id, name_en, name_zh, protocol, issuer, homepage, domain, client_id, client_auth,
 // scopes, email_domains, metadata_url, entity_id, sso_url, certs, sub_source,
 // email_attribute_verified, github, email
 export function buildIdp(f) {
@@ -85,10 +85,14 @@ export function buildIdp(f) {
     e.client_auth = ["private_key_jwt", "client_secret_basic", "client_secret_post"].includes(f.client_auth) ? f.client_auth : "private_key_jwt";
     e.scopes = lines(f.scopes).length ? lines(f.scopes) : ["openid", "email", "profile"];
   }
+  const dom = lower(f.domain, 253).replace(/\.$/, "");
+  if (dom) e.domain = dom;
   const doms = lines(f.email_domains).map((d) => d.toLowerCase());
   if (doms.length) e.email_domains = doms;
   e.status = "active";
-  return { entry: e, errors: validateIdp(e) };
+  const errors = validateIdp(e);
+  if (!e.domain) errors.push("domain: required (your own domain, proven by DNS TXT)");
+  return { entry: e, errors };
 }
 
 export function idpInstructions(e) {
@@ -100,7 +104,7 @@ export function idpInstructions(e) {
     if (e.client_auth === "private_key_jwt") out.push(`JWKS URI to register for the client: ${BASE_URL}/client-jwks.json`);
     else out.push("Send the client secret to the RoamID operator privately (SECURITY.md); it is never put in the repository.");
   }
-  for (const d of e.email_domains || []) out.push(`DNS TXT  ${proofName(d)}  "${proofValue(e.id)}"`);
+  for (const d of new Set([...(e.domain ? [e.domain] : []), ...(e.email_domains || [])])) out.push(`DNS TXT  ${proofName(d)}  "${proofValue(e.id)}"`);
   return out;
 }
 

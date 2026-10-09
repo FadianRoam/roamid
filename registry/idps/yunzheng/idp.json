@@ -5,6 +5,7 @@
   "name": { "en": "YunZheng Auth" },
   "issuer": "https://auth.yunzheng.space/realms/lab",
   "homepage": "https://yunzheng.space/",
+  "domain": "yunzheng.space",
   "contact": { "github": "yunzheng2006", "email": "support@yunzheng.space" },
   "client_id": "roamid",
   "client_auth": "client_secret_basic",

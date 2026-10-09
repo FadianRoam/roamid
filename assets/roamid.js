@@ -125,6 +125,14 @@
     sort.addEventListener("change", resort);
   }
 
+  // Console app form: filter the identity provider list (ticked ones stay visible).
+  $$(".idp-list").forEach(function (box) {
+    var q = $(".idp-q", box), ls = $$("label[data-q]", box);
+    var run = function () { var s = norm(q.value); ls.forEach(function (l) { l.hidden = !!s && l.getAttribute("data-q").indexOf(s) < 0 && !$("input", l).checked; }); };
+    q.addEventListener("input", run);
+    q.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); if (e.key === "Escape" && q.value) { q.value = ""; run(); } });
+  });
+
   // ---- SAML: post the message on load
   var ap = $("form[data-autopost]");
   if (ap) { var bt = $("button", ap); if (bt) bt.disabled = true; setTimeout(function () { ap.submit(); }, 50); setTimeout(function () { if (bt) bt.disabled = false; }, 3000); }

@@ -6,7 +6,7 @@
 //
 // entry: { client_id, protocol, name: {en, zh}, domain, homepage,
 //          redirect_uris | acs_urls, post_logout_redirect_uris }
-// ctx:   { development, names: [{ id, name }], reserved: [name],
+// ctx:   { development, names: [{ id, name, owner? }], reserved: [name],
 //          resolves(host) -> bool, blocked(host) -> source|null,
 //          banned(domain) -> bool }   (each async, each optional)
 
@@ -52,7 +52,18 @@ export function mixedScripts(s) {
 
 const err = (code, field, message) => ({ code, field, message });
 
-export function checkName(name, field, { names = [], self = null, reserved = RESERVED } = {}) {
+// `names` holds the names in use. An identity provider's entry carries
+// `owner`, its proven domain (DNS TXT). An application whose domain is
+// exactly that domain belongs to the same operator and may use the
+// provider's name, so a provider can register its own sites as RoamID
+// applications (their callbacks may still be on subdomains). Exactly, not
+// a subdomain: a subdomain can be someone else's (hosting, user pages) and
+// an application's own proof may be a file on its web server. Applications
+// on that domain do not block each other's names either, so an unproven
+// application cannot hold the name against the operator; it becomes active
+// only after proving the domain.
+export function checkName(name, field, { names = [], self = null, reserved = RESERVED, domain = null } = {}) {
+  const own = !!domain && names.some((o) => o.owner && o.owner === domain);
   const out = [];
   const n = String(name || "").trim();
   if (n.length < LIMITS.nameMin || n.length > LIMITS.nameMax) out.push(err("name_length", field, `between ${LIMITS.nameMin} and ${LIMITS.nameMax} characters`));
@@ -69,6 +80,7 @@ export function checkName(name, field, { names = [], self = null, reserved = RES
   }
   for (const o of names) {
     if (o.id === self) continue;
+    if (own && (o.owner === domain || (!o.owner && o.domain === domain))) continue;
     if (skeleton(o.name) === sk) { out.push(err("name_taken", field, `too close to the name of ${o.id}`)); break; }
   }
   return out;
@@ -116,8 +128,8 @@ export async function checkApp(entry, ctx = {}) {
   const development = !!ctx.development;
   errors.push(...checkDomainSyntax(domain));
   const names = ctx.names || [];
-  errors.push(...checkName(entry.name && entry.name.en, "name.en", { names, self: entry.client_id, reserved: ctx.reserved || RESERVED }));
-  if (entry.name && entry.name.zh) errors.push(...checkName(entry.name.zh, "name.zh", { names, self: entry.client_id, reserved: ctx.reserved || RESERVED }));
+  errors.push(...checkName(entry.name && entry.name.en, "name.en", { names, self: entry.client_id, reserved: ctx.reserved || RESERVED, domain }));
+  if (entry.name && entry.name.zh) errors.push(...checkName(entry.name.zh, "name.zh", { names, self: entry.client_id, reserved: ctx.reserved || RESERVED, domain }));
   const urls = [];
   if (entry.homepage) urls.push(["homepage", entry.homepage, false]);
   const cb = entry.protocol === "saml2" ? entry.acs_urls : entry.redirect_uris;

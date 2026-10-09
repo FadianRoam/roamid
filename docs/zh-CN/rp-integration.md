@@ -19,7 +19,8 @@ RoamID 是标准的 OpenID Connect Provider，任何经过认证的 OpenID Conne
 | `token_endpoint_auth_method` | `none`、`private_key_jwt`、`client_secret_basic` 或 `client_secret_post`。 |
 | `client_secret_sha256` | 用于 `client_secret_*`：自行生成至少 32 字节随机密钥，只公开该密钥字符串的 SHA-256（十六进制）。例：`openssl rand -base64 32 \| tr -d '\n' > secret.txt; shasum -a 256 secret.txt`。不要提交密钥本身。 |
 | `jwks_uri` | 用于 `private_key_jwt`：公钥的 https 地址（RS256、PS256 或 ES256）。 |
-| `allowed_idps` | 可选，身份提供方 id 列表；不填则提供全部启用中的提供方。 |
+| `allowed_idps` | 可选。只提供这些身份提供方；以后加入登记表的提供方，在列入这里之前不会提供。 |
+| `excluded_idps` | 可选。提供除这些以外所有启用中的身份提供方；以后加入的提供方自动提供。不能与 `allowed_idps` 同时使用。两者都不填时提供全部启用中的提供方。 |
 | `subject_type` | `public`（默认）或 `pairwise`。 |
 | `id_token_signed_response_alg` | 可选。`RS256`（默认）或 `ES256`：本应用收到的 ID 令牌的签名算法。 |
 | `domain` | 应用的域名（第 12 节）。自动合并时必填，在选择页显示。 |
@@ -252,7 +253,7 @@ claims.validate()
 | 名称 | 不含域名（如 `example.com`） | `name_domain` |
 | 名称 | 不混用拉丁字母与西里尔或希腊字母 | `name_mixed_script` |
 | 名称 | 不与保留名称（[policy/reserved-names.json](../../policy/reserved-names.json)）过于相近：按形近字骨架比较（`0`→`o`、`rn`→`m`、西里尔 `о`→`o` 等），五个字符及以上的保留名称作为名称的一部分比较，较短的按整词比较 | `name_reserved` |
-| 名称 | 骨架不与其他身份提供方或应用相同 | `name_taken` |
+| 名称 | 骨架不与其他身份提供方或应用相同。例外：应用的 `domain` 与某个身份提供方已证明的 `domain` 完全相同（子域名不算）时，可以使用该提供方的名称，该域名下的应用之间名称也不互相阻挡；二者属于同一运营方。回调地址仍可在子域名上 | `name_taken` |
 | 域名 | 主机名，如 `example.com`；不能是 IP 地址 | `domain_invalid` |
 | 域名 | 不是被封禁应用的域名（或其子域名） | `domain_banned` |
 | 域名与地址 | 主机不在 RoamID 每天载入的公开黑名单（URLhaus、OpenPhish）中 | `reputation` |

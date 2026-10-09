@@ -108,10 +108,13 @@ function refuseApp(request, env, client, gate, backTo, uiLocales) {
   return errorHtml(request, gate, { status: 403, back: gate === "app_banned" ? null : backTo, rpName: gate === "app_banned" ? null : rpName, uiLocales, detail: client.app && client.app.reason ? client.app.reason : undefined });
 }
 
-// The IdPs a client may use, in registry order.
+// The IdPs a client may use, in registry order: only the allowed ones, or
+// all but the excluded ones (providers added later are then offered too).
 export function idpsFor(reg, client) {
   const all = [...reg.idps.values()].filter((i) => i.status === "active");
-  return client.allowed_idps ? all.filter((i) => client.allowed_idps.includes(i.id)) : all;
+  if (client.allowed_idps) return all.filter((i) => client.allowed_idps.includes(i.id));
+  if (client.excluded_idps) return all.filter((i) => !client.excluded_idps.includes(i.id));
+  return all;
 }
 
 async function loadTx(env, id) {

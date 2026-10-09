@@ -23,6 +23,9 @@ body:
     attributes: { label: "Homepage / 主页" }
     validations: { required: true }
   - type: input
+    attributes: { label: "Domain / 域名", description: "Your own domain, e.g. example.org. The issuer (or SAML endpoints) and the homepage are on it or a subdomain. Proven by DNS TXT _roamid.<domain> \"roamid-idp=<id>\" before review. / 你自己的域名，如 example.org；issuer（或 SAML 地址）与主页须在其下。审核前以 DNS TXT 证明。" }
+    validations: { required: true }
+  - type: input
     attributes: { label: "Issuer (OIDC)" }
   - type: input
     attributes: { label: "Client ID at your identity provider (OIDC) / 在你的身份提供方处的客户端 ID", value: roamid }
