@@ -21,6 +21,10 @@ async function genKey(alg, kid) {
   return { ...jwk, kid, alg };
 }
 
+// ID token keys: generated once per process (RSA key generation is slow).
+export const SIGNING_RS = await genKey("RS256", "sig-rs-test");
+export const SIGNING_EC = await genKey("ES256", "sig-test");
+
 // A community OIDC provider. Codes are issued by `issue()`, standing in for
 // the person signing in there.
 export class MockIdp {
@@ -90,12 +94,11 @@ export function clientEntry(client_id, extra = {}) {
 export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra = {}, extraIdps = [] } = {}) {
   resetMemo(); resetUpstreamCaches();
   const db = memoryD1();
-  const signing = await genKey("ES256", "sig-test");
   const client = await genKey("RS256", "cli-test");
   const rpKey = await genKey("ES256", "rp-1");
   const h = {
     db, rpKey, rpSigner: await importPrivate(rpKey), txt, idps: {}, net: [], files: {},
-    env: { DB: db, BASE_URL: BASE, REGISTRY_URL, SIGNING_KEYS: JSON.stringify([signing]), CLIENT_KEYS: JSON.stringify([client]),
+    env: { DB: db, BASE_URL: BASE, REGISTRY_URL, SIGNING_KEYS: JSON.stringify([SIGNING_EC, SIGNING_RS]), CLIENT_KEYS: JSON.stringify([client]),
       SAML_KEYS, ADMIN_TOKEN: "admin-token-0123456789", IDP_SECRET_GOOD: "upstream-secret", IDP_SECRET_EVIL: "upstream-secret", IDP_SECRET_OFF: "upstream-secret" },
   };
   for (const [id, host] of Object.entries(idpSpecs || { good: "idp.example.test" })) h.idps[id] = await new MockIdp(host).init();

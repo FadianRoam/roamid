@@ -599,3 +599,34 @@ test("/admin leads to the operator queue", async () => {
   assert.equal(r.status, 302);
   assert.equal(r.headers.get("Location"), "/admin/reports");
 });
+
+test("console: ID token algorithm, RS256 by default, ES256 on request, others refused", async () => {
+  const { pkce } = await import("./_harness.mjs");
+  const { verify } = await import("../src/lib/jwt.js");
+  const h = await consoleSetup();
+  await consoleLogin(h, USERS.alice);
+  h.txt["_roamid-app.example.org"] = [];
+  const tampered = await post(h, "/console/new", appFields({ id_token_signed_response_alg: "HS256" }));
+  assert.equal(tampered.status, 422);
+  assert.match(await tampered.text(), /id_token_signed_response_alg/);
+  const c = await createApp(h, { redirect_uris: "http://localhost:3000/cb", auth_method: "none" });
+  assert.ok(c.id, c.body.slice(0, 400));
+  assert.match(c.body, /id="id-token-alg">RS256</, "the app page shows the default");
+  const cfg = () => h.db.prepare("SELECT config FROM apps WHERE client_id = ?").bind(c.id).first().then((r) => JSON.parse(r.config));
+  assert.equal((await cfg()).id_token_signed_response_alg, "RS256");
+  const algFor = async () => {
+    const pk = await pkce();
+    const l = await login(h, { client: c.id, redirectUri: "http://localhost:3000/cb", user: USERS.alice, pk });
+    const x = await exchange(h, { code: l.code, client: c.id, redirectUri: "http://localhost:3000/cb", verifier: pk.verifier });
+    assert.equal(x.res.status, 200, JSON.stringify(x.body));
+    const keys = (await (await h.request("/jwks.json")).json()).keys;
+    return (await verify(x.body.id_token, keys, ["RS256", "ES256"])).header.alg;
+  };
+  assert.equal(await algFor(), "RS256");
+  await consoleLogin(h, USERS.alice);
+  const edit = await post(h, `/console/app/${c.id}/edit`, appFields({ redirect_uris: "http://localhost:3000/cb", auth_method: "none", id_token_signed_response_alg: "ES256" }));
+  assert.ok(edit.status < 400, `edit: ${edit.status}`);
+  assert.equal((await cfg()).id_token_signed_response_alg, "ES256");
+  assert.match(await (await h.request(`/console/app/${c.id}/edit`)).text(), /<option value="ES256" selected>/);
+  assert.equal(await algFor(), "ES256");
+});

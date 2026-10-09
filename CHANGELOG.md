@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0 (2026-10-09)
+
+- ID tokens are signed with RS256 by default (OpenID Connect Core 15.1). An application may set `id_token_signed_response_alg` to `RS256` or `ES256` in its registry entry or in the console; other values are refused. Discovery lists `id_token_signing_alg_values_supported: ["RS256", "ES256"]`; `/jwks.json` publishes the keys of both algorithms.
+- Upgrade: `SIGNING_KEYS` needs an RS256 key. Generate one with `node scripts/keygen.mjs signing RS256`, append it to the array, and `secret put` it before deploying 1.4.0; keep the ES256 key. Without an RS256 key, the token endpoint answers `server_error` for applications on the default.
+- `id_token_hint` at `/logout` is accepted with either algorithm.
+
 ## 1.3.1 (2026-10-08)
 
 - Co-owner invitations are accepted only with an email address that an identity provider authoritative for its domain asserted as verified; an invitation for another address reads as not valid.

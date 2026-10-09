@@ -21,6 +21,7 @@ RoamID 是标准的 OpenID Connect Provider，任何经过认证的 OpenID Conne
 | `jwks_uri` | 用于 `private_key_jwt`：公钥的 https 地址（RS256、PS256 或 ES256）。 |
 | `allowed_idps` | 可选，身份提供方 id 列表；不填则提供全部启用中的提供方。 |
 | `subject_type` | `public`（默认）或 `pairwise`。 |
+| `id_token_signed_response_alg` | 可选。`RS256`（默认）或 `ES256`：本应用收到的 ID 令牌的签名算法。 |
 | `domain` | 应用的域名（第 12 节）。自动合并时必填，在选择页显示。 |
 
 ## 2. 端点
@@ -63,7 +64,7 @@ RoamID 是标准的 OpenID Connect Provider，任何经过认证的 OpenID Conne
 
 ## 5. ID 令牌与声明
 
-ID 令牌用 ES256 签名，公钥在 `/jwks.json`，带 `kid`，有效期 1 小时。包含 `iss`、`aud`、`azp`、`iat`、`exp`、`nonce`（请求带了时）、`at_hash`，以及：
+ID 令牌用 RS256 签名；条目写明 `"id_token_signed_response_alg": "ES256"`（控制台中为「ID 令牌签名」）时用 ES256。两种算法的公钥都在 `/jwks.json`，各带 `kid`、`alg` 与 `use: "sig"`，按令牌的 `kid` 选取公钥；有效期 1 小时。包含 `iss`、`aud`、`azp`、`iat`、`exp`、`nonce`（请求带了时）、`at_hash`，以及：
 
 | 声明 | scope | 值 |
 |---|---|---|

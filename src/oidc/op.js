@@ -2,7 +2,7 @@
 
 import { b64url, randomToken, sha256, sha256b64url, sha256hex, safeEqual } from "../lib/b64.js";
 import { sign, verify, decode } from "../lib/jwt.js";
-import { signingKeys } from "../lib/keys.js";
+import { signingKeys, idTokenSigner, ID_TOKEN_ALGS } from "../lib/keys.js";
 import { json, html, redirect, cookie, getCookie, readForm, now, newNonce, corsPreflight, cspPostingTo } from "../lib/http.js";
 import { allow } from "../lib/ratelimit.js";
 import { clientIp } from "../platform/index.js";
@@ -42,7 +42,7 @@ export function discoveryDoc(env) {
     response_modes_supported: ["query"],
     grant_types_supported: ["authorization_code"],
     subject_types_supported: ["public", "pairwise"],
-    id_token_signing_alg_values_supported: ["ES256"],
+    id_token_signing_alg_values_supported: [...ID_TOKEN_ALGS],
     userinfo_signing_alg_values_supported: ["none"],
     token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post", "private_key_jwt"],
     token_endpoint_auth_signing_alg_values_supported: ["RS256", "PS256", "ES256"],
@@ -534,6 +534,13 @@ export async function token(request, env) {
   const client = auth.client;
   if (!(await allow(env, "client", client.client_id))) return tokenError("slow_down", "rate limited", 429, { "Retry-After": "60" });
   if (form.get("grant_type") !== "authorization_code") return tokenError("unsupported_grant_type", "only authorization_code is supported");
+  // The ID token key before the code is spent: a missing key is a server
+  // error that leaves the code usable once it is fixed.
+  let signer;
+  try { signer = await idTokenSigner(env, client); } catch (e) {
+    console.error(JSON.stringify({ msg: "id_token signer", client: client.client_id, error: e.message }));
+    return tokenError("server_error", "the ID token cannot be signed", 500);
+  }
   const code = form.get("code") || "";
   const codeHash = await sha256b64url(code);
   const row = await env.DB.prepare("SELECT * FROM codes WHERE code_hash = ?").bind(codeHash).first();
@@ -561,7 +568,6 @@ export async function token(request, env) {
   const t0 = now();
   await env.DB.prepare("INSERT INTO tokens (token_hash, client_id, claims, scope, expires) VALUES (?, ?, ?, ?, ?)")
     .bind(atHash, client.client_id, JSON.stringify(scoped), row.scope, t0 + TOKEN_TTL).run();
-  const { signer } = await signingKeys(env);
   const half = (await sha256(accessToken)).slice(0, 16);
   const idToken = await sign({
     iss: env.BASE_URL, aud: client.client_id, azp: client.client_id, iat: t0, exp: t0 + TOKEN_TTL,
@@ -613,7 +619,7 @@ export async function logout(request, env) {
   if (hint) {
     try {
       const { jwks } = await signingKeys(env);
-      const { payload } = await verify(hint, jwks.keys, ["ES256"]);
+      const { payload } = await verify(hint, jwks.keys, ID_TOKEN_ALGS);
       if (payload.iss !== env.BASE_URL) throw new Error("iss");
       const aud = Array.isArray(payload.aud) ? payload.aud[0] : payload.aud;
       if (clientId && clientId !== aud) clientId = null; else clientId = aud;

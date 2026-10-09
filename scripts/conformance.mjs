@@ -9,7 +9,8 @@
 // Part 1 needs nothing. Part 2 needs one authorization code for the demo
 // client: set CODE, CODE_VERIFIER and NONCE (the values of one completed
 // sign-in at /demo, e.g. from a browser automation), and the token-level
-// checks run as well.
+// checks run as well. ALG names the expected ID token algorithm (default
+// RS256, the demo client's).
 import { createPublicKey, verify as cverify, createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
@@ -27,12 +28,13 @@ check("config: issuer equals the base URL", d.issuer === BASE, d.issuer);
 for (const k of ["authorization_endpoint", "token_endpoint", "userinfo_endpoint", "jwks_uri"]) check(`config: ${k} is https on the issuer`, String(d[k]).startsWith(`${BASE}/`), d[k]);
 check("config: response_types_supported = [code]", JSON.stringify(d.response_types_supported) === '["code"]');
 check("config: subject_types_supported has public", (d.subject_types_supported || []).includes("public"));
-check("config: id_token_signing_alg_values_supported has ES256, no none", d.id_token_signing_alg_values_supported.includes("ES256") && !d.id_token_signing_alg_values_supported.includes("none"));
+check("config: id_token_signing_alg_values_supported has RS256 (required) and ES256, no none", d.id_token_signing_alg_values_supported.includes("RS256") && d.id_token_signing_alg_values_supported.includes("ES256") && !d.id_token_signing_alg_values_supported.includes("none"), d.id_token_signing_alg_values_supported.join(","));
 check("config: code_challenge_methods_supported = [S256]", JSON.stringify(d.code_challenge_methods_supported) === '["S256"]');
 check("config: scopes_supported has openid", d.scopes_supported.includes("openid"));
 check("config: authorization_response_iss_parameter_supported", d.authorization_response_iss_parameter_supported === true);
 const jwks = await (await get("/jwks.json")).json();
-check("keys: JWKS has EC P-256 keys with kid and no private part", jwks.keys.length > 0 && jwks.keys.every((k) => k.kty === "EC" && k.crv === "P-256" && k.kid && !k.d), jwks.keys.map((k) => k.kid).join(","));
+const keyOk = (k) => k.kid && k.use === "sig" && !k.d && !k.p && ((k.kty === "RSA" && k.alg === "RS256") || (k.kty === "EC" && k.crv === "P-256" && k.alg === "ES256"));
+check("keys: JWKS has an RS256 and an ES256 key, each with kid, use and alg, no private part", jwks.keys.every(keyOk) && jwks.keys.some((k) => k.alg === "RS256") && jwks.keys.some((k) => k.alg === "ES256"), jwks.keys.map((k) => `${k.kid}:${k.alg}`).join(","));
 let r = await get(authz({}).replace(`client_id=${CLIENT}`, "client_id=no-such-client"));
 check("authorize: unknown client -> error page, no redirect", r.status >= 400 && !r.headers.get("location"), r.status);
 r = await get(authz({ redirect_uri: "https://evil.example/cb" }));
@@ -90,7 +92,7 @@ if (process.env.CODE) {
   const hdr = JSON.parse(Buffer.from(h, "base64url")), c = JSON.parse(Buffer.from(p, "base64url"));
   const key = jwks.keys.find((k) => k.kid === hdr.kid);
   const sigOk = !!key && cverify("sha256", Buffer.from(`${h}.${p}`), { key: createPublicKey({ key, format: "jwk" }), dsaEncoding: "ieee-p1363" }, Buffer.from(s, "base64url"));
-  check("id_token: ES256 signature verifies with the JWKS key named by kid", hdr.alg === "ES256" && sigOk, hdr.kid);
+  check(`id_token: ${process.env.ALG || "RS256"} signature verifies with the JWKS key named by kid`, hdr.alg === (process.env.ALG || "RS256") && key && key.alg === hdr.alg && sigOk, `${hdr.alg} ${hdr.kid}`);
   const t = Math.floor(Date.now() / 1000);
   check("id_token: iss, aud, azp", c.iss === BASE && c.aud === CLIENT && c.azp === CLIENT);
   check("id_token: iat and exp", c.iat <= t + 5 && c.exp > t && c.exp - c.iat <= 3600, `${c.iat} ${c.exp}`);

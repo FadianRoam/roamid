@@ -24,8 +24,8 @@ test("happy path: public client with PKCE, picker, upstream login, token, userin
   const { res, body } = await exchange(h, { code: r.code, verifier: pk.verifier });
   assert.equal(res.status, 200, JSON.stringify(body));
   assert.equal(res.headers.get("Access-Control-Allow-Origin"), "*");
-  const { payload, header } = await verify(body.id_token, await jwks(h), ["ES256"]);
-  assert.equal(header.alg, "ES256");
+  const { payload, header } = await verify(body.id_token, await jwks(h), ["RS256"]);
+  assert.equal(header.alg, "RS256");
   assert.equal(payload.iss, BASE);
   assert.equal(payload.aud, "spa");
   assert.equal(payload.nonce, "n-1");

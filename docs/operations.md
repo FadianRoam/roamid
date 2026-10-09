@@ -23,7 +23,7 @@ Set with `npx wrangler secret put <NAME> -c wrangler.local.toml`. Keep an offlin
 
 | Name | Content |
 |---|---|
-| `SIGNING_KEYS` | JSON array of private JWKs, ES256. `node scripts/keygen.mjs signing` |
+| `SIGNING_KEYS` | JSON array of private JWKs: at least one RS256 key (the default ID token algorithm) and one ES256 key. `node scripts/keygen.mjs signing` |
 | `CLIENT_KEYS` | JSON array of private JWKs, RS256 or ES256. `node scripts/keygen.mjs client` |
 | `ADMIN_TOKEN` | bearer token for `POST /admin/sync` |
 | `IDP_SECRET_<ID>` | client secret at an identity provider using `client_secret_*` (`<ID>`: id in upper case, `-` as `_`) |
@@ -34,15 +34,15 @@ Set with `npx wrangler secret put <NAME> -c wrangler.local.toml`. Keep an offlin
 
 ## Key rotation / 密钥轮换
 
-The first key in `SIGNING_KEYS` signs ID tokens; every key in the array is published at `/jwks.json`. `CLIENT_KEYS` works the same way with `/client-jwks.json`.
-`SIGNING_KEYS` 的第一个密钥签发 ID 令牌，数组中所有密钥都发布在 `/jwks.json`。`CLIENT_KEYS` 与 `/client-jwks.json` 同理。
+In `SIGNING_KEYS`, the first RS256 key signs RS256 ID tokens and the first ES256 key signs ES256 ID tokens; every key in the array is published at `/jwks.json`. Rotate each algorithm on its own. In `CLIENT_KEYS` the first key signs assertions; every key is published at `/client-jwks.json`.
+`SIGNING_KEYS` 中，第一个 RS256 密钥签发 RS256 的 ID 令牌，第一个 ES256 密钥签发 ES256 的 ID 令牌；数组中所有密钥都发布在 `/jwks.json`。两种算法各自轮换。`CLIENT_KEYS` 的第一个密钥签发断言，所有密钥都发布在 `/client-jwks.json`。
 
 1. Publish: append a new key at the end of the array and `secret put` it. It is published, not used.
    发布：把新密钥追加到数组末尾并 `secret put`。它被发布，但不使用。
 2. Overlap: wait at least 24 hours, so that applications and identity providers caching the key set see the new key.
    重叠：至少等待 24 小时，让缓存公钥集的应用与身份提供方取到新密钥。
-3. Switch: move the new key to the front and `secret put`.
-   切换：把新密钥移到最前并 `secret put`。
+3. Switch: move the new key before the old key of the same algorithm and `secret put`.
+   切换：把新密钥移到同算法旧密钥之前并 `secret put`。
 4. Retire: after another 24 hours (ID tokens live 1 hour; assertions 60 seconds), remove the old key.
    退役：再过 24 小时（ID 令牌有效 1 小时，断言 60 秒）移除旧密钥。
 
