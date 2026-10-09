@@ -165,6 +165,9 @@
       sessionStorage.setItem(K, JSON.stringify({ v: v, st: st, no: no }));
       var u = new URL(B + "/authorize");
       var p = { response_type: "code", client_id: CID, redirect_uri: RU, scope: "openid email profile", state: st, nonce: no, code_challenge: ch, code_challenge_method: "S256" };
+      // /demo?idp=<id> (the landing's sample picker): sign in at that provider.
+      var hint = new URLSearchParams(location.search).get("idp");
+      if (hint && /^[a-z0-9-]{2,32}$/.test(hint)) p.idp_hint = hint;
       Object.keys(p).forEach(function (k) { u.searchParams.set(k, p[k]); });
       location.assign(u.toString());
     };

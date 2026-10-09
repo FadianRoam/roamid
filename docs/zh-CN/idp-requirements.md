@@ -55,7 +55,7 @@
   _roamid.example.org.  TXT  "roamid-idp=<id>"
   ```
 
-- 新条目缺少 `domain` 或缺少该记录时 CI 拒绝；维护者只审核域名已证明的条目。RoamID 与邮箱域名一样每天复查该记录，`/status` 显示其状态。在 `domain` 推出之前登记的条目继续可用，并会被要求补上。
+- 新条目缺少 `domain` 或缺少该记录时 CI 拒绝。条目已证明且通过自动审核的拉取请求会自动合并（见 [registry.md](registry.md) 第 5 步）。RoamID 与邮箱域名一样每天复查该记录，`/status` 显示其状态。在 `domain` 推出之前登记的条目继续可用，并会被要求补上。
 - `domain` 不代表对邮箱地址有权威；需要时把该域名同时列入 `email_domains`。一条 TXT 记录同时覆盖两者。
 - `domain` 证明后，运营方可以用提供方的名称把自己的网站登记为 RoamID 应用（见 [rp-integration.md](rp-integration.md) 自动审核）。
 

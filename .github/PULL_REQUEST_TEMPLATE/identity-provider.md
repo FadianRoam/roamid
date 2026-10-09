@@ -6,7 +6,8 @@
 
 Checklist / 检查项：
 
-- [ ] I am the `contact.github` of this entry or a maintainer of the organisation. / 我是条目的 `contact.github` 或该组织的维护者。
+- [ ] For a change to an existing entry: I am its `contact.github`. / 修改已有条目时：我是其 `contact.github`。
+- [ ] `domain` is the provider's own domain and has the TXT record `_roamid.<domain>` = `roamid-idp=<id>`. / `domain` 是提供方自己的域名，且已有 TXT 记录。
 - [ ] The provider meets [docs/idp-requirements.md](../../docs/idp-requirements.md). / 提供方满足身份提供方要求。
 - [ ] A client is registered at the provider with redirect URI `https://id.fadianro.am/callback/<id>`. / 已在提供方处登记客户端，回调地址为 `https://id.fadianro.am/callback/<id>`。
 - [ ] Client authentication: `private_key_jwt` with `https://id.fadianro.am/client-jwks.json`, or a client secret handed over privately (SECURITY.md). / 客户端认证：`private_key_jwt`，或经私下渠道交接的客户端密钥。

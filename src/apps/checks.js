@@ -62,8 +62,9 @@ const err = (code, field, message) => ({ code, field, message });
 // on that domain do not block each other's names either, so an unproven
 // application cannot hold the name against the operator; it becomes active
 // only after proving the domain.
-export function checkName(name, field, { names = [], self = null, reserved = RESERVED, domain = null } = {}) {
-  const own = !!domain && names.some((o) => o.owner && o.owner === domain);
+// `proven`: the caller has proven `domain` itself (an identity provider entry).
+export function checkName(name, field, { names = [], self = null, reserved = RESERVED, domain = null, proven = false } = {}) {
+  const own = !!domain && (proven || names.some((o) => o.owner && o.owner === domain));
   const out = [];
   const n = String(name || "").trim();
   if (n.length < LIMITS.nameMin || n.length > LIMITS.nameMax) out.push(err("name_length", field, `between ${LIMITS.nameMin} and ${LIMITS.nameMax} characters`));

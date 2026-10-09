@@ -127,3 +127,20 @@ test("scaffold: an identity provider without domain is refused", async () => {
   assert.match(buildIdp(f).errors.join(" "), /domain: required/);
   assert.deepEqual(buildIdp({ ...f, domain: "example.org" }).errors, []);
 });
+
+test("an active provider with client_secret_* waits for its secret: not offered, shown as not yet available", async () => {
+  const h = await setup({ idps: { good: "idp.example.test", second: "idp2.example.test" } });
+  delete h.env.IDP_SECRET_SECOND;
+  await h.sync();
+  const l = await login(h, { pk: await pkce(), user: alice, pick: false });
+  const picker = l.picker ? await l.picker.text() : "";
+  assert.ok(!picker.includes('id="opt-second"'), "not offered without its secret");
+  const page = await (await h.request("/idps")).text();
+  assert.match(page, /id="idp-second"/, "listed on /idps");
+  const hint = await login(h, { pk: await pkce(), params: { idp_hint: "second" }, user: alice, pick: false });
+  assert.match(hint.authorize.headers.get("Location") || "", /^\/select/, "a hint to it falls back to the picker");
+  h.env.IDP_SECRET_SECOND = "upstream-secret";
+  const { resetMemo } = await import("../src/registry/store.js"); resetMemo();
+  const l2 = await login(h, { pk: await pkce(), user: alice, pick: false });
+  assert.ok((await l2.picker.text()).includes('id="opt-second"'), "offered once the secret is set");
+});

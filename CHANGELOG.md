@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 (2026-10-09)
+
+- Identity provider entries declare `domain`, the operator's own domain: the issuer (SAML: metadata or SSO URL) and the homepage are on it, and it is proven by the DNS TXT record `_roamid.<domain>` = `roamid-idp=<id>`. Required for new entries; RoamID rechecks it daily.
+- Identity provider pull requests are merged automatically when the entry passes the automated review: `domain` and email domains proven, discovery or SAML metadata loaded, the name checked like an application name, no banned or listed host, the logo checks. A change to an existing entry comes from its `contact.github`. An OpenID Connect provider with a client secret is offered once `IDP_SECRET_<ID>` is set; until then `/idps` shows it as not yet available.
+- Applications choose the providers they offer: all (default), `allowed_idps` (only these; later additions not offered) or `excluded_idps` (all but these; later additions offered).
+- An application whose `domain` equals an identity provider's proven `domain` may use that provider's name.
+- `/demo?idp=<id>` signs in at that provider.
+
 ## 1.4.0 (2026-10-09)
 
 - ID tokens are signed with RS256 by default (OpenID Connect Core 15.1). An application may set `id_token_signed_response_alg` to `RS256` or `ES256` in its registry entry or in the console; other values are refused. Discovery lists `id_token_signing_alg_values_supported: ["RS256", "ES256"]`; `/jwks.json` publishes the keys of both algorithms.

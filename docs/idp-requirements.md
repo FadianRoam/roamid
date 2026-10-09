@@ -55,7 +55,7 @@ Every new entry declares `domain`: the domain of the organization that operates 
   _roamid.example.org.  TXT  "roamid-idp=<id>"
   ```
 
-- CI refuses a new entry without `domain` or without the record; a maintainer reviews only entries whose domain is proven. RoamID checks the record again every day, like email domains, and `/status` shows its state. Entries listed before `domain` existed keep working and are asked to add it.
+- CI refuses a new entry without `domain` or without the record. A pull request whose entries are proven and pass the automated review is merged automatically ([registry.md](registry.md), step 5). RoamID checks the record again every day, like email domains, and `/status` shows its state. Entries listed before `domain` existed keep working and are asked to add it.
 - `domain` does not make the provider authoritative for email addresses; list the domain in `email_domains` as well for that. One TXT record covers both.
 - With a proven `domain`, the operator can register its own sites as RoamID applications under the provider's name ([rp-integration.md](rp-integration.md), automated review).
 

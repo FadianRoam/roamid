@@ -206,7 +206,7 @@ export function idpsPage({ lang, theme, path = "/idps", idps, health = {}, added
     return `<li class="idrow" id="idp-${esc(i.id)}" data-q="${esc(searchText(i))}" data-name="${esc(norm(name))}" data-added="${added[i.id] || 0}" data-rank="${rank[st]}">
 <span class="main"><span class="nm" title="${esc(name)}">${esc(name)}</span><span class="idt">${esc(i.id)}</span></span>
 <span class="host" title="${esc(host)}">${esc(host)}</span>
-<span class="st"><span class="dot ${st === "disabled" ? "unknown" : st}"></span>${esc(st === "disabled" ? t(lang, i.override ? "paused" : "disabled") : t(lang, "status_" + st))}</span>
+<span class="st"><span class="dot ${st === "disabled" ? "unknown" : st}"></span>${esc(st === "disabled" ? t(lang, i.override || i.awaiting ? "paused" : "disabled") : t(lang, "status_" + st))}</span>
 <span class="badge proto">${i.protocol === "saml2" ? "SAML" : "OIDC"}</span>
 ${logoTile(i, lang)}${sub ? `\n<span class="sub">${sub}</span>` : ""}
 </li>`;
