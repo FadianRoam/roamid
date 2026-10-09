@@ -51,7 +51,7 @@ function formFromRow(row) {
 function toEntry(clientId, v) {
   const config = { subject_type: v.subject_type };
   // "except" with nothing ticked is the same as "all".
-  if (v.idp_mode === "only") config.allowed_idps = v.idp_ids;
+  if (v.idp_mode === "only" && v.idp_ids.length) config.allowed_idps = v.idp_ids;
   else if (v.idp_mode === "except" && v.idp_ids.length) config.excluded_idps = v.idp_ids;
   if (v.protocol === "saml2") {
     config.entity_id = v.entity_id; config.acs_urls = v.acs_urls; if (v.idp_initiated) config.idp_initiated = true;
@@ -73,7 +73,7 @@ function toEntry(clientId, v) {
 async function reviewForm(env, reg, clientId, v, { creator, editing } = {}) {
   const { entry, config } = toEntry(clientId, v);
   const errors = validateClient(entry).map((m) => ({ code: "schema", field: m.split(":")[0], message: m }));
-  if (v.idp_mode === "only" && !v.idp_ids.length) errors.push({ code: "idps_none", field: "allowed_idps", message: "choose at least one identity provider" });
+  if (v.idp_mode === "only" && !v.idp_ids.length) errors.push({ code: "idps_pick", field: "allowed_idps", message: "choose at least one identity provider" });
   if (v.idp_mode !== "all") for (const a of v.idp_ids) if (!reg.idps.has(a)) errors.push({ code: "schema", field: v.idp_mode === "only" ? "allowed_idps" : "excluded_idps", message: `unknown identity provider ${a}` });
   if (v.idp_mode === "except" && v.idp_ids.length && ![...reg.idps.values()].some((i) => i.status === "active" && !v.idp_ids.includes(i.id))) errors.push({ code: "idps_none", field: "excluded_idps", message: "this would leave no identity provider to offer" });
   if (!errors.length) errors.push(...(await reviewEntry(env, reg, entry)).errors);

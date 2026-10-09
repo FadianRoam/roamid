@@ -81,7 +81,8 @@ test("console: offer all, only the selected, or all but the selected; the picker
   assert.match(form, /name="idp_mode" value="all" checked/);
   assert.match(form, /class="idp-q"/);
   const none = await post(h, "/console/new", fields({ idp_mode: "only" }));
-  assert.equal(none.r.status, 422); assert.match(none.body, /idps_none/);
+  assert.equal(none.r.status, 422); assert.match(none.body, /idps_pick/);
+  assert.equal(none.body.match(/<li data-code=/g).length, 1, "one reason, not a schema error as well");
   const all = await post(h, "/console/new", fields({ idp_mode: "except", idp_ids: ["good", "second", "third"] }));
   assert.equal(all.r.status, 422); assert.match(all.body, /no identity provider to offer/);
   const c = await post(h, "/console/new", fields({ idp_mode: "except", idp_ids: "good" }));
