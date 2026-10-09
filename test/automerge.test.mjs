@@ -18,8 +18,10 @@ function gh({ files, pr: prOver = {}, conclusion = "success", headLater, runs } 
   let prReads = 0;
   const api = async (path, opt = {}) => {
     calls.push([opt.method || "GET", path]);
-    if (path === "/pulls/7") { prReads++; return headLater ? { ...pr, head: { sha: headLater } } : pr; }
-    if (path.startsWith("/pulls?")) return [pr];
+    // headLater: the head moves after the review read it (from the second read on).
+    if (path === "/pulls/7") { prReads++; return headLater && prReads > 1 ? { ...pr, head: { sha: headLater } } : pr; }
+    // Like GitHub: the list endpoint has no changed_files.
+    if (path.startsWith("/pulls?")) { const { changed_files, ...lite } = pr; return [lite]; }
     if (path.startsWith("/actions/runs")) return { workflow_runs: runs || [{ name: "check", event: "pull_request", run_number: 3, status: "completed", conclusion }] };
     const m = /^\/pulls\/7\/files\?per_page=100&page=(\d+)$/.exec(path);
     if (m) { const p = Number(m[1]); return files.slice((p - 1) * 100, p * 100).map((f) => ({ filename: f.filename, status: f.status || "added" })); }
@@ -249,4 +251,20 @@ test("SAML entity IDs: https on the verified domain or a subdomain, unique acros
   const n = net({ txt: { "_roamid-app.held.example.org": ["roamid-app=wiki2"] } });
   const r = await reviewClients([saml("https://wiki.held.example.org/saml", { client_id: "wiki2", domain: "held.example.org", homepage: "https://held.example.org/", acs_urls: ["https://wiki.held.example.org/acs"], contact: { github: "x", email: "a@held.example.org" } })], doc, n);
   assert.ok(r.results[0].errors.some((e) => e.code === "entity_taken"), JSON.stringify(r.results[0].errors));
+});
+
+test("automerge: the scheduled run reads each pull request again (the list has no changed_files)", async () => {
+  const g = gh({ files: [clientFile("listed-app")] });
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
+  assert.ok(g.calls.some(([m, p]) => m === "GET" && p === "/pulls/7"), "the full pull request was read");
+  assert.equal(merges(g.calls), 1);
+});
+
+test("automerge: an identity provider pull request is left to a maintainer, with that reason", async () => {
+  const g = gh({ files: [{ filename: "registry/idps/new/idp.json", content: {} }] });
+  const said = [];
+  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log: (x) => said.push(x) });
+  assert.equal(merges(g.calls), 0);
+  assert.ok(said.some((x) => /reviewed and merged by a maintainer/.test(x)), said.join("\n"));
+  assert.ok(!said.some((x) => /no files changed/.test(x)));
 });
