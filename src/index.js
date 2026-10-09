@@ -187,6 +187,7 @@ export async function handle(request, env, ctx) {
   if (p === "/prefs" && m === "GET") return prefs(request);
   if (p === "/console" || p.startsWith("/console/")) { const r = await handleConsole(request, env, p); if (r) return r; }
   if (p === "/report") { const r = await handleReport(request, env); if (r) return r; }
+  if (p === "/admin") return new Response(null, { status: 302, headers: { Location: "/admin/reports" } });
   if (p === "/admin/reports" || p.startsWith("/admin/target")) { const r = await handleAdmin(request, env, p); if (r) return r; }
   if ((p === "/apps" || p === "/apps.json" || p.startsWith("/apps/")) && (m === "GET" || m === "HEAD")) { const r = await handleApps(request, env, p); if (r) return r; }
   if (m !== "GET" && m !== "HEAD") return json({ error: "method_not_allowed" }, { status: 405 });
