@@ -70,6 +70,7 @@ ${field("redirect_uris", t(v.lang, "c_f_redirects"), `<textarea name="redirect_u
 ${field("post_logout_redirect_uris", t(v.lang, "c_f_logout"), `<textarea name="post_logout_redirect_uris" rows="2" spellcheck="false">${lines("post_logout_redirect_uris")}</textarea>`, t(v.lang, "c_f_optional"))}
 ${field("auth_method", t(v.lang, "c_f_auth"), `<select name="auth_method">${opt("client_secret_basic", t(v.lang, "c_auth_basic"), method)}${opt("client_secret_post", t(v.lang, "c_auth_post"), method)}${opt("private_key_jwt", t(v.lang, "c_auth_jwt"), method)}${opt("none", t(v.lang, "c_auth_none"), method)}</select>`)}
 ${field("jwks_uri", t(v.lang, "c_f_jwks"), `<input name="jwks_uri" type="url" maxlength="300" value="${val("jwks_uri")}">`, t(v.lang, "c_f_jwks_hint"))}
+${field("id_token_signed_response_alg", t(v.lang, "c_f_idtoken_alg"), `<select name="id_token_signed_response_alg">${opt("RS256", "RS256", f.id_token_alg || "RS256")}${opt("ES256", "ES256", f.id_token_alg || "RS256")}</select>`, t(v.lang, "c_f_idtoken_alg_hint"))}
 </div>
 <div class="when-saml">
 ${field("entity_id", t(v.lang, "c_f_entity"), `<input name="entity_id" maxlength="300" spellcheck="false" value="${val("entity_id")}">`)}
@@ -94,7 +95,7 @@ ${kv([[t(L, "c_proof_txt"), `<code>_roamid-app.${esc(app.domain)}</code> TXT <co
 <form method="post" action="/console/app/${esc(app.client_id)}/check">${csrfField(s)}<div class="btnrow"><button class="pill" type="submit" id="check-now">${esc(t(L, "c_check_now"))}</button></div></form>`;
   const integration = isSaml
     ? kv([[t(L, "c_idp_metadata"), `<code>${esc(base)}/saml/idp/metadata.xml</code>`], ["Entity ID", `<code>${esc(app.entity_id)}</code>`], ["ACS", (app.acs_urls || []).map((u) => `<code>${esc(u)}</code>`).join("<br>")], [t(L, "c_f_subject"), esc(t(L, "c_subject_" + (app.subject_type || "public")))]])
-    : kv([["client_id", `<code id="client-id">${esc(app.client_id)}</code>`], ["Issuer", `<code>${esc(base)}</code>`], [t(L, "c_discovery"), `<code>${esc(base)}/.well-known/openid-configuration</code>`], [t(L, "c_f_redirects"), (app.redirect_uris || []).map((u) => `<code>${esc(u)}</code>`).join("<br>")], [t(L, "c_f_auth"), `<code>${esc(app.token_endpoint_auth_method)}</code>`], [t(L, "c_f_subject"), esc(t(L, "c_subject_" + (app.subject_type || "public")))]]);
+    : kv([["client_id", `<code id="client-id">${esc(app.client_id)}</code>`], ["Issuer", `<code>${esc(base)}</code>`], [t(L, "c_discovery"), `<code>${esc(base)}/.well-known/openid-configuration</code>`], [t(L, "c_f_redirects"), (app.redirect_uris || []).map((u) => `<code>${esc(u)}</code>`).join("<br>")], [t(L, "c_f_auth"), `<code>${esc(app.token_endpoint_auth_method)}</code>`], [t(L, "c_f_idtoken_alg"), `<code id="id-token-alg">${esc(app.id_token_signed_response_alg || "RS256")}</code>`], [t(L, "c_f_subject"), esc(t(L, "c_subject_" + (app.subject_type || "public")))]]);
   const usesSecret = !isSaml && /^client_secret_/.test(app.token_endpoint_auth_method);
   const secretBox = usesSecret ? `${secret ? `<div class="notice ok"><p>${esc(t(L, "c_secret_once"))}</p><p><code class="secret" id="client-secret">${esc(secret)}</code></p></div>` : ""}
 <p>${esc(t(L, row.secret_sha256_old ? "c_secret_two" : "c_secret_one"))}</p>

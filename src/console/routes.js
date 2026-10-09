@@ -35,7 +35,7 @@ function readAppForm(f) {
   return {
     name_en: str("name_en", 80), name_zh: str("name_zh", 80), domain: str("domain", 253).toLowerCase().replace(/\.$/, ""), homepage: str("homepage", 300),
     protocol: f.get("protocol") === "saml2" ? "saml2" : "oidc", redirect_uris: lines("redirect_uris"), post_logout_redirect_uris: lines("post_logout_redirect_uris"),
-    auth_method: method, jwks_uri: str("jwks_uri", 300), subject_type: f.get("subject_type") === "pairwise" ? "pairwise" : "public",
+    auth_method: method, jwks_uri: str("jwks_uri", 300), id_token_alg: str("id_token_signed_response_alg", 20) || "RS256", subject_type: f.get("subject_type") === "pairwise" ? "pairwise" : "public",
     allowed_idps: f.getAll("allowed_idps").map(String).slice(0, 50), entity_id: str("entity_id", 300), acs_urls: lines("acs_urls"), idp_initiated: f.get("idp_initiated") === "yes", sign_cert: str("sign_cert", 8000),
   };
 }
@@ -43,7 +43,7 @@ function readAppForm(f) {
 function formFromRow(row) {
   const e = appEntry(row);
   return { name_en: e.name.en, name_zh: e.name.zh || "", domain: e.domain, homepage: e.homepage, protocol: e.protocol, redirect_uris: e.redirect_uris || [], post_logout_redirect_uris: e.post_logout_redirect_uris || [],
-    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", subject_type: e.subject_type || "public", allowed_idps: e.allowed_idps || [], entity_id: e.entity_id || "", idp_initiated: e.idp_initiated === true, acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
+    auth_method: e.token_endpoint_auth_method, jwks_uri: e.jwks_uri || "", id_token_alg: e.id_token_signed_response_alg || "RS256", subject_type: e.subject_type || "public", allowed_idps: e.allowed_idps || [], entity_id: e.entity_id || "", idp_initiated: e.idp_initiated === true, acs_urls: e.acs_urls || [], sign_cert: e.sign_cert || "" };
 }
 
 // The registry-shaped entry (for the shared rules) and the stored config.
@@ -55,6 +55,7 @@ function toEntry(clientId, v) {
     if (v.sign_cert) config.sign_cert = v.sign_cert;
   } else {
     config.redirect_uris = v.redirect_uris; config.token_endpoint_auth_method = v.auth_method;
+    config.id_token_signed_response_alg = v.id_token_alg;
     if (v.post_logout_redirect_uris.length) config.post_logout_redirect_uris = v.post_logout_redirect_uris;
     if (v.auth_method === "private_key_jwt") config.jwks_uri = v.jwks_uri;
   }
