@@ -63,6 +63,11 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
   const sha = pr.head.sha;
   if (pr.base.ref !== "main" || !pr.base.repo || pr.base.repo.full_name !== repo) return { reasons: ["only pull requests to main of this repository are merged automatically"], sha };
   if (!(pr.changed_files >= 1)) return { reasons: ["no files changed"], sha };
+  if (pr.changed_files <= maxFiles) {
+    // Identity provider entries are reviewed by a maintainer: say so plainly.
+    const peek = await listFiles(api, pr.number);
+    if (peek.length && peek.every((f) => /^registry\/idps\//.test(f.filename))) return { reasons: ["identity provider entries are reviewed and merged by a maintainer"], sha, human: true };
+  }
   if (pr.changed_files > maxFiles) return { reasons: [`${pr.changed_files} files: at most ${maxFiles} files are merged automatically`], sha };
   // The check run for this exact commit: from the pull_request event, or
   // dispatched for a bot branch (only the repository can dispatch).
@@ -117,7 +122,11 @@ export async function decide(pr, { api, repo, base = toDoc(readTree()), review =
 }
 
 export async function run({ api, repo, only, dry, base, review, log = console.log, published = null }) {
-  const prs = only ? [await api(`/pulls/${only}`)] : await api("/pulls?state=open&per_page=50");
+  // The list endpoint leaves out changed_files (and other detail fields): every
+  // pull request is read again on its own before it is reviewed.
+  const listed = only ? [{ number: only }] : await api("/pulls?state=open&per_page=50");
+  const prs = [];
+  for (const p of listed) prs.push(await api(`/pulls/${p.number}`));
   const merged = [];
   for (const pr of prs) {
     // Drafts are never merged; a dry run of one named pull request may review a draft.
