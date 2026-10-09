@@ -102,6 +102,7 @@ export async function setup({ idps: idpSpecs, clients, txt = {}, registryExtra =
       SAML_KEYS, ADMIN_TOKEN: "admin-token-0123456789", IDP_SECRET_GOOD: "upstream-secret", IDP_SECRET_EVIL: "upstream-secret", IDP_SECRET_OFF: "upstream-secret" },
   };
   for (const [id, host] of Object.entries(idpSpecs || { good: "idp.example.test" })) h.idps[id] = await new MockIdp(host).init();
+  for (const id of Object.keys(h.idps)) h.env[`IDP_SECRET_${id.toUpperCase().replace(/-/g, "_")}`] ??= "upstream-secret";
   h.registry = {
     version: 1, commit: "a".repeat(40), generated_at: new Date().toISOString(),
     idps: [...Object.entries(h.idps).map(([id, idp]) => idpEntry(idp, id)), ...extraIdps],

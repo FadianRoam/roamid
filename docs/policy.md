@@ -11,7 +11,7 @@ An application registered with RoamID must not be used for:
 - distributing malware;
 - content that is illegal where the application is offered.
 
-Identity providers are reviewed by a person before they are listed ([registry.md](registry.md)). Applications are reviewed automatically ([rp-integration.md](rp-integration.md) section 12) and go live when the checks pass; the report channel below is how problems that the checks cannot see reach the operator.
+Identity providers and applications are reviewed automatically (identity providers: domain proof and the other checks in [registry.md](registry.md) step 5; applications: [rp-integration.md](rp-integration.md) section 12) and go live when the checks pass; the report channel below is how problems that the checks cannot see reach the operator.
 
 ## Reports
 

@@ -1,7 +1,9 @@
-# Every change needs a review by a code owner, except application entries
-# and the transparency record: those pull requests are merged by the
-# automatic review (scripts/automerge.mjs) when the check passes.
+# Every change needs a review by a code owner, except application and
+# identity provider entries and the transparency record: those pull requests
+# are merged by the automatic review (scripts/automerge.mjs) when the check
+# passes.
 *                       @yunzheng2006 @uetcis
 /registry/clients/
+/registry/idps/
 /transparency/
 /.github/CODEOWNERS     @yunzheng2006 @uetcis

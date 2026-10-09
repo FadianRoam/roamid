@@ -20,13 +20,15 @@ registry/clients/<client_id>.json  应用         schema/client.schema.json
    ```
 3. 用对应的模板提交拉取请求：身份提供方或应用。
 4. CI 运行测试、schema 与规则检查、对 `main` 的永久标识检查；对身份提供方还会实际载入 discovery 文档，并检查其 `domain`（新提供方必填）与邮箱域名的 TXT 记录。结果见 `check` 工作流的 job summary。
-5. 身份提供方：由维护者审核并合并。应用：只新增或修改 `registry/clients/*.json` 的拉取请求，在 `check` 工作流通过、且每个条目都通过自动审核（[rp-integration.md](rp-integration.md) 第 12 节，含域名证明）时自动合并；修改已有应用须由其 `contact.github` 中的 GitHub 账户提交。否则 `automerge` 作业会评论说明原因，维护者仍可人工审核。该作业在本仓库上以 `main` 的代码运行，经 GitHub API 读取拉取请求，从不运行其中的代码。约 5 分钟内条目发布到 `https://fadianroam.github.io/roamid/registry.json` 并被 RoamID 载入，`/status` 显示正在使用的提交。
+5. 两类条目都在 `check` 工作流通过、且每个条目都通过自动审核时自动合并；修改已有条目须由其 `contact.github` 中的 GitHub 账户提交。
+   - 应用：只新增或修改 `registry/clients/*.json` 的拉取请求；审核规则见 [rp-integration.md](rp-integration.md) 第 12 节，含域名证明。
+   - 身份提供方：只新增或修改 `registry/idps/<id>/idp.json` 及其标志的拉取请求。审核内容：`domain` 与每个邮箱域名均有 DNS TXT 证明，discovery 文档或 SAML 元数据可载入，名称按应用名称的规则检查（保留名称、已使用的名称），任何主机都不在封禁名单或黑名单中，标志通过检查（[idp-requirements.md](idp-requirements.md) 第 3 节）。使用客户端密钥的提供方，在密钥经私下渠道交接后才会提供；在此之前 `/idps` 显示为暂未开放。否则 `automerge` 作业会评论说明原因，维护者仍可人工审核。该作业在本仓库上以 `main` 的代码运行，经 GitHub API 读取拉取请求，从不运行其中的代码。约 5 分钟内条目发布到 `https://fadianroam.github.io/roamid/registry.json` 并被 RoamID 载入，`/status` 显示正在使用的提交。
 
 `client_auth` 为 `client_secret_basic` 或 `client_secret_post` 的身份提供方，要在密钥交给运营方之后才能使用（见 [idp-requirements.md](idp-requirements.md) 第 2 节）。
 
 ## 没有列表中身份提供方的账户时
 
-开发者控制台需要通过列表中的某个身份提供方登录。没有账户时可以改用 GitHub 登记；下面每种方式最终都是一个拉取请求，经过同样的检查（应用：自动审核与自动合并；身份提供方：维护者审核）。
+开发者控制台需要通过列表中的某个身份提供方登录。没有账户时可以改用 GitHub 登记；下面每种方式最终都是一个拉取请求，经过同样的检查（自动审核与自动合并）。
 
 **一键：打开填好示例的新文件，然后点「Propose new file」。** 替换示例值、把文件名改为你的标识后提交，拉取请求模板会随之打开。
 
@@ -74,7 +76,7 @@ npm run new:idp     # 写入 registry/idps/<id>/idp.json；--logo <文件> 同�
 | 内容 | 非动画；图像结束后不得有其他数据 |
 | 权利 | 本身份提供方自己的标志，提交者有权使用 |
 
-CI 检查该文件，并在拉取请求摘要中列出所有问题。维护者审核身份提供方条目，拒绝模仿其他组织标志的图像。发布步骤把文件以内容哈希命名放在 `registry.json` 旁，并在条目中描述（`logo`：`path`、`sha256`、`type`、`width`、`height`；不写在 `idp.json` 中）。RoamID 从同一来源下载、再次检查，并在 `https://id.fadianro.am/logos/<id>.<哈希>.<扩展名>` 提供；页面从不从 GitHub 加载。
+CI 检查该文件，并在拉取请求摘要中列出所有问题；自动审核执行同样的检查。提交者声明该标志是提供方自己的标志。模仿其他组织标志的图像可以举报（`/report`），经审核后移除，必要时连同条目一起移除。发布步骤把文件以内容哈希命名放在 `registry.json` 旁，并在条目中描述（`logo`：`path`、`sha256`、`type`、`width`、`height`；不写在 `idp.json` 中）。RoamID 从同一来源下载、再次检查，并在 `https://id.fadianro.am/logos/<id>.<哈希>.<扩展名>` 提供；页面从不从 GitHub 加载。
 
 ## 运行时的条目状态
 

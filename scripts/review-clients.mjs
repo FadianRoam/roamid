@@ -9,10 +9,10 @@ import { checkApp, proveAppDomain, resolvesPublic, RESERVED } from "../src/apps/
 import { lookupTxt as dohTxt } from "../src/registry/domains.js";
 import { proofName, proofValue } from "../src/registry/validate.js";
 
-const LIVE = process.env.ROAMID_URL || "https://id.fadianro.am";
+export const LIVE = process.env.ROAMID_URL || "https://id.fadianro.am";
 export const LISTS = ["https://urlhaus.abuse.ch/downloads/hostfile/", "https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt"];
 
-async function blockSet(fetchFn) {
+export async function blockSet(fetchFn) {
   const set = new Map();
   for (const url of LISTS) {
     const r = await fetchFn(url, { signal: AbortSignal.timeout(15000) });

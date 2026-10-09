@@ -12,7 +12,7 @@ const entry = (id, o = {}) => ({ client_id: id, protocol: "oidc", name: { en: `P
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
 
 // A GitHub API double: one pull request with `files` (filename, status, content).
-function gh({ files, pr: prOver = {}, conclusion = "success", headLater, runs } = {}) {
+function gh({ files, pr: prOver = {}, conclusion = "success", headLater, runs, contents } = {}) {
   const calls = [];
   const pr = { number: 7, state: "open", draft: false, head: { sha: "a".repeat(40) }, base: { ref: "main", repo: { full_name: REPO } }, user: { login: "bob" }, changed_files: files.length, ...prOver };
   let prReads = 0;
@@ -25,7 +25,13 @@ function gh({ files, pr: prOver = {}, conclusion = "success", headLater, runs } 
     if (path.startsWith("/actions/runs")) return { workflow_runs: runs || [{ name: "check", event: "pull_request", run_number: 3, status: "completed", conclusion }] };
     const m = /^\/pulls\/7\/files\?per_page=100&page=(\d+)$/.exec(path);
     if (m) { const p = Number(m[1]); return files.slice((p - 1) * 100, p * 100).map((f) => ({ filename: f.filename, status: f.status || "added" })); }
-    if (path.startsWith("/contents/")) { const f = files.find((x) => path.startsWith(`/contents/${x.filename}?`)); return { content: b64(f.content) }; }
+    if (path.startsWith("/contents/")) {
+      const f = files.find((x) => path.startsWith(`/contents/${x.filename}?`)) || (contents || []).find((x) => path.startsWith(`/contents/${x.filename}?`));
+      if (f) return { content: f.raw ? Buffer.from(f.raw).toString("base64") : b64(f.content) };
+      const dir = /^\/contents\/(registry\/idps\/[^/?]+)\?/.exec(path);
+      if (dir) return [...files, ...(contents || [])].filter((x) => x.filename.startsWith(`${dir[1]}/`)).map((x) => ({ name: x.filename.split("/").pop() }));
+      throw new Error("HTTP 404");
+    }
     if (path.startsWith("/issues/7/comments") && !opt.method) return [];
     return {};
   };
@@ -189,14 +195,6 @@ test("automerge: a pull_request run held for approval is not a verdict; the disp
   assert.equal(merges(g.calls), 0, "only a held run: nothing ran, nothing merged");
 });
 
-test("automerge: an identity provider directory (idp.json or logo) is never merged automatically", async () => {
-  for (const filename of ["registry/idps/new-idp/idp.json", "registry/idps/yunzheng/logo.png"]) {
-    const g = gh({ files: [{ filename, content: { id: "new-idp" } }] });
-    await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log() {} });
-    assert.equal(merges(g.calls), 0, filename);
-  }
-});
-
 test("automerge: dispatches publish when the published registry is behind main", async () => {
   const g = gh({ files: [] });
   const api = async (path, opt) => (path === "/git/ref/heads/main" ? { object: { sha: "b".repeat(40) } } : path.startsWith("/pulls?") ? [] : g.api(path, opt));
@@ -260,11 +258,88 @@ test("automerge: the scheduled run reads each pull request again (the list has n
   assert.equal(merges(g.calls), 1);
 });
 
-test("automerge: an identity provider pull request is left to a maintainer, with that reason", async () => {
-  const g = gh({ files: [{ filename: "registry/idps/new/idp.json", content: {} }] });
-  const said = [];
-  await run({ api: g.api, repo: REPO, base: BASE, review: okReview, log: (x) => said.push(x) });
+// ---- identity providers ------------------------------------------------------------
+import { readFileSync } from "node:fs";
+import { reviewIdps } from "../scripts/review-idps.mjs";
+
+const idp = (id, o = {}) => ({ id, protocol: "oidc", name: { en: `Community ${id}` }, issuer: `https://login.${id}.example.org`, homepage: `https://${id}.example.org/`, domain: `${id}.example.org`,
+  contact: { github: "carol", email: "ops@example.org" }, client_id: "roamid", client_auth: "private_key_jwt", scopes: ["openid", "email", "profile"], status: "active", ...o });
+const IBASE = { idps: [idp("old-idp", { contact: { github: "dave", email: "d@example.org" } })], clients: [] };
+const idpFile = (id, o, status) => ({ filename: `registry/idps/${id}/idp.json`, content: idp(id, o), ...(status ? { status } : {}) });
+const LOGO = readFileSync(new URL("../registry/idps/jyl/logo.png", import.meta.url));
+const okIdps = async (entries) => ({ results: entries.map((e) => ({ id: e.id, errors: [] })) });
+const decideIdp = (g, reviewIdp = okIdps, base = IBASE) => decide(g.pr, { api: g.api, repo: REPO, base, review: okReview, reviewIdp });
+
+test("automerge: a new identity provider that passes the automated review is merged, logo included", async () => {
+  const g = gh({ files: [idpFile("new-idp"), { filename: "registry/idps/new-idp/logo.png", raw: LOGO }], pr: { user: { login: "anyone" } } });
+  await run({ api: g.api, repo: REPO, base: IBASE, review: okReview, reviewIdp: okIdps, log() {} });
+  assert.equal(merges(g.calls), 1, "a new provider needs no particular author: the domain proof shows the operator");
+});
+
+test("automerge: identity provider rules (contact.github for changes, no mixing, logo checks, review findings)", async () => {
+  let d = await decideIdp(gh({ files: [idpFile("old-idp", { contact: { github: "dave", email: "d@example.org" } }, "modified")], pr: { user: { login: "mallory" } } }));
+  assert.match(d.reasons.join(), /opened by its contact\.github \(dave\)/);
+  d = await decideIdp(gh({ files: [idpFile("old-idp", { contact: { github: "dave", email: "d@example.org" }, name: { en: "Renamed" } }, "modified")], pr: { user: { login: "Dave" } } }));
+  assert.ok(d.merge, JSON.stringify(d));
+  d = await decideIdp(gh({ files: [idpFile("old-idp", { contact: { github: "mallory", email: "m@example.org" } }, "modified")], pr: { user: { login: "dave" } } }));
+  assert.match(d.reasons.join(), /contact\.github cannot change/);
+  // A logo-only change reads the entry from the head commit.
+  d = await decideIdp(gh({ files: [{ filename: "registry/idps/old-idp/logo.png", raw: LOGO }], contents: [idpFile("old-idp", { contact: { github: "dave", email: "d@example.org" } })], pr: { user: { login: "dave" } } }));
+  assert.ok(d.merge, JSON.stringify(d));
+  d = await decideIdp(gh({ files: [idpFile("mix-idp"), clientFile("mix-app")] }));
+  assert.match(d.reasons.join(), /registry\/clients\/mix-app\.json: an identity provider pull request changes only/);
+  d = await decideIdp(gh({ files: [idpFile("bad-logo"), { filename: "registry/idps/bad-logo/logo.png", raw: Buffer.from("<svg/>") }] }));
+  assert.match(d.reasons.join(), /logo\.png: /);
+  d = await decideIdp(gh({ files: [idpFile("two-logos"), { filename: "registry/idps/two-logos/logo.png", raw: LOGO }], contents: [{ filename: "registry/idps/two-logos/logo.webp", raw: LOGO }] }));
+  assert.match(d.reasons.join(), /at most one logo/);
+  d = await decideIdp(gh({ files: [idpFile("wrong-dir", { id: "other-id" })] }));
+  assert.match(d.reasons.join(), /directory name must equal id/);
+  d = await decideIdp(gh({ files: [{ ...idpFile("gone-idp"), status: "removed" }] }));
+  assert.match(d.reasons.join(), /removed/);
+  d = await decideIdp(gh({ files: [idpFile("found-idp")] }), async (es) => ({ results: es.map((e) => ({ id: e.id, errors: [{ code: "domain_unproven", field: "domain", message: "no TXT" }] })) }));
+  assert.equal(d.idp, true); assert.match(d.reasons.join(), /found-idp: domain: no TXT \(domain_unproven\)/);
+  d = await decideIdp(gh({ files: [idpFile("wait-idp")] }), async () => ({ temporary: true, reason: "DNS down" }));
+  assert.equal(d.wait, "DNS down");
+  d = await decideIdp(gh({ files: [idpFile("dup-iss", { issuer: "https://login.old-idp.example.org", domain: "old-idp.example.org", homepage: "https://old-idp.example.org/" })] }));
+  assert.match(d.reasons.join(), /dup-iss: issuer: already registered/);
+});
+
+test("automerge: a refused identity provider gets one comment that points to the provider requirements", async () => {
+  const g = gh({ files: [idpFile("note-idp")] });
+  await run({ api: g.api, repo: REPO, base: IBASE, review: okReview, reviewIdp: async (es) => ({ results: es.map((e) => ({ id: e.id, errors: [{ code: "probe", field: "issuer", message: "HTTP 404" }] })) }), log() {} });
   assert.equal(merges(g.calls), 0);
-  assert.ok(said.some((x) => /reviewed and merged by a maintainer/.test(x)), said.join("\n"));
-  assert.ok(!said.some((x) => /no files changed/.test(x)));
+  assert.ok(g.calls.some(([m, p]) => m === "POST" && p === "/issues/7/comments"));
+});
+
+// The provider review with a mocked network: TXT, live apps, block lists, probe.
+function idpNet({ txt = {}, apps = [], banned = [], blocked = "" } = {}) {
+  const fetchFn = async (u) => {
+    const url = String(u);
+    if (url.endsWith("/apps.json")) return Response.json({ apps, banned_domains: banned });
+    if (url.includes("urlhaus")) return new Response(blocked);
+    if (url.includes("openphish")) return new Response("");
+    return new Response("no route", { status: 599 });
+  };
+  return { fetchFn, lookupTxt: async (name) => txt[name] || [], probe: async () => ({ errors: [], notes: [] }) };
+}
+const codesOf = (r) => r.results[0].errors.map((e) => e.code);
+
+test("reviewIdps: domain and email domains proven, names, banned and listed hosts, probe", async () => {
+  const doc = { idps: [], clients: [] };
+  const proof = { "_roamid.acme.example.org": ["roamid-idp=acme"] };
+  const e = idp("acme", { domain: "acme.example.org", issuer: "https://login.acme.example.org", homepage: "https://acme.example.org/" });
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, idpNet({ txt: proof }))), []);
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, idpNet())), ["domain_unproven"]);
+  assert.deepEqual(codesOf(await reviewIdps([{ ...e, email_domains: ["mail.example.net"] }], doc, idpNet({ txt: proof }))), ["domain_unproven"], "each email domain needs its record");
+  assert.deepEqual(codesOf(await reviewIdps([{ ...e, domain: undefined }], doc, idpNet({ txt: proof }))), ["domain_missing"]);
+  assert.ok(codesOf(await reviewIdps([{ ...e, name: { en: "G00gle Login" } }], doc, idpNet({ txt: proof }))).includes("name_reserved"));
+  // An application with the same name blocks a provider, unless it is on the provider's domain.
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, idpNet({ txt: proof, apps: [{ client_id: "app-x", name: { en: "Community acme" }, domain: "other.example" }] }))), ["name_taken"]);
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, idpNet({ txt: proof, apps: [{ client_id: "app-x", name: { en: "Community acme" }, domain: "acme.example.org" }] }))), []);
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, idpNet({ txt: proof, banned: ["example.org"] }))), ["domain_banned", "domain_banned"], "each distinct host: the domain (also the homepage) and the issuer");
+  assert.ok(codesOf(await reviewIdps([e], doc, idpNet({ txt: proof, blocked: "0.0.0.0 login.acme.example.org\n" }))).includes("reputation"));
+  const failing = { ...idpNet({ txt: proof }), probe: async () => ({ errors: ["discovery: HTTP 404"], notes: [] }) };
+  assert.deepEqual(codesOf(await reviewIdps([e], doc, failing)), ["probe"]);
+  const down = { ...idpNet({ txt: proof }), fetchFn: async () => new Response("", { status: 503 }) };
+  assert.equal((await reviewIdps([e], doc, down)).temporary, true, "fails closed");
 });

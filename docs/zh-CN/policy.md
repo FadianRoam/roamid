@@ -11,7 +11,7 @@
 - 传播恶意软件；
 - 在应用提供地违法的内容。
 
-身份提供方在列入登记表前由人工审核（[registry.md](registry.md)）。应用由自动检查审核（[rp-integration.md](rp-integration.md) 第 12 节），通过即上线；检查发现不了的问题，经下述举报渠道交给运营方。
+身份提供方与应用都由自动检查审核（身份提供方：域名证明等，见 [registry.md](registry.md) 第 5 步；应用：[rp-integration.md](rp-integration.md) 第 12 节），通过即上线；检查发现不了的问题，经下述举报渠道交给运营方。
 
 ## 举报
 

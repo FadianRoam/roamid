@@ -31,9 +31,19 @@ export function resetMemo() { memo = null; }
 
 // The registry with the operator's emergency overrides applied: an
 // identity provider disabled by the operator reads as status "disabled"
-// everywhere, without waiting for a registry change.
+// everywhere, without waiting for a registry change. An active OpenID
+// Connect provider with client_secret_* reads as disabled with `awaiting:
+// "secret"` until its secret (IDP_SECRET_<ID>) is set: an entry can be
+// merged automatically before the secret has been handed over.
+export const secretVar = (id) => "IDP_SECRET_" + id.toUpperCase().replace(/-/g, "_");
+const awaitsSecret = (env, i) => i.status === "active" && i.protocol !== "saml2" && /^client_secret_/.test(i.client_auth || "") && !env[secretVar(i.id)];
 export async function getRegistry(env) {
-  const reg = await loadRegistry(env);
+  let reg = await loadRegistry(env);
+  if ([...reg.idps.values()].some((i) => awaitsSecret(env, i))) {
+    const idps = new Map(reg.idps);
+    for (const i of idps.values()) if (awaitsSecret(env, i)) idps.set(i.id, { ...i, status: "disabled", awaiting: "secret" });
+    reg = { ...reg, idps };
+  }
   let ov;
   try { ov = (await env.DB.prepare("SELECT idp, reason FROM idp_overrides WHERE disabled = 1").all()).results || []; } catch { ov = []; }
   if (!ov.length) return reg;

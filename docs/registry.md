@@ -20,13 +20,15 @@ registry/clients/<client_id>.json  applications         schema/client.schema.jso
    ```
 3. Open a pull request with the matching template: identity provider or application.
 4. CI runs the tests, the schema and rule checks, the permanent-identifier check against `main`, and for identity providers a live probe of the discovery document and the TXT records of the provider's `domain` (required for a new provider) and email domains. The result is in the job summary of the `check` workflow.
-5. Identity providers: a maintainer reviews and merges. Applications: a pull request that only adds or changes `registry/clients/*.json` is merged automatically when the `check` workflow passed and every entry passes the automated review ([rp-integration.md](rp-integration.md) section 12), domain proof included; a change to an existing application must come from the GitHub account in its `contact.github`. Otherwise the `automerge` job comments with the reasons and a maintainer can still review it. The job runs on this repository with `main` checked out; it reads the pull request through the GitHub API and never runs its code. Within about 5 minutes the entry is published at `https://fadianroam.github.io/roamid/registry.json` and loaded by RoamID. `/status` shows the commit in use.
+5. Both are merged automatically when the `check` workflow passed and every entry passes its automated review; a change to an existing entry must come from the GitHub account in its `contact.github`.
+   - Applications: a pull request that only adds or changes `registry/clients/*.json`; the review is [rp-integration.md](rp-integration.md) section 12, domain proof included.
+   - Identity providers: a pull request that only adds or changes `registry/idps/<id>/idp.json` and its logo. The review: `domain` and every email domain proven by DNS TXT, the discovery document or SAML metadata loaded, the name checked like an application name (reserved names, names in use), no host banned or on a block list, the logo checks ([idp-requirements.md](idp-requirements.md) section 3). A provider with a client secret is offered once the secret has been handed over privately; until then `/idps` shows it as not yet available. Otherwise the `automerge` job comments with the reasons and a maintainer can still review it. The job runs on this repository with `main` checked out; it reads the pull request through the GitHub API and never runs its code. Within about 5 minutes the entry is published at `https://fadianroam.github.io/roamid/registry.json` and loaded by RoamID. `/status` shows the commit in use.
 
 An identity provider entry with `client_auth` `client_secret_basic` or `client_secret_post` is only usable after its secret has been handed to the operator (see [idp-requirements.md](idp-requirements.md) section 2).
 
 ## Without an account at a listed identity provider
 
-The developer console needs a sign-in through one of the listed identity providers. Without one, register by GitHub instead; every way below ends in a pull request that goes through the same checks (applications: automated review and automatic merge; identity providers: review by a maintainer).
+The developer console needs a sign-in through one of the listed identity providers. Without one, register by GitHub instead; every way below ends in a pull request that goes through the same checks (automated review and automatic merge).
 
 **One click: a new file with a filled-in example, then "Propose new file".** Replace the example values, rename the file to your identifier, and submit. The template of the pull request opens with it.
 
@@ -74,7 +76,7 @@ An identity provider may add one logo next to its entry: `registry/idps/<id>/log
 | Content | not animated; no data after the end of the image |
 | Rights | the provider's own mark, which the person submitting it has the right to use |
 
-CI checks the file and reports every problem in the pull request summary. Maintainers review identity provider entries and refuse logos that imitate the marks of other organisations. The publish step adds the file next to `registry.json` under a content-hashed name and describes it in the entry (`logo`: `path`, `sha256`, `type`, `width`, `height`; not written in `idp.json`). RoamID downloads it from the same origin, checks it again and serves it from `https://id.fadianro.am/logos/<id>.<hash>.<ext>`; pages never load it from GitHub.
+CI checks the file and reports every problem in the pull request summary; the automatic review applies the same checks. The person submitting declares that it is the provider's own mark. A logo that imitates another organisation's mark can be reported (`/report`) and is removed after review, with the entry if needed. The publish step adds the file next to `registry.json` under a content-hashed name and describes it in the entry (`logo`: `path`, `sha256`, `type`, `width`, `height`; not written in `idp.json`). RoamID downloads it from the same origin, checks it again and serves it from `https://id.fadianro.am/logos/<id>.<hash>.<ext>`; pages never load it from GitHub.
 
 ## Entry status at run time
 

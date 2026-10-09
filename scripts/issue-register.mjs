@@ -5,8 +5,8 @@
 // scripts/scaffold.mjs, and only the resulting JSON is committed to a bot
 // branch issue-<n> through the API. A pasted secret is removed from the
 // issue and nothing is opened. The pull request then follows the normal
-// path: the check workflow is dispatched for it; applications are merged by
-// the automatic review, identity providers wait for a maintainer.
+// path: the check workflow is dispatched for it, then the automatic review
+// merges applications and identity providers that pass it.
 import { readFileSync } from "node:fs";
 import { buildClient, clientInstructions, buildIdp, idpInstructions, parseIssueForm, findSecrets, redactIssue, quote } from "./scaffold.mjs";
 import { APP_FORM, IDP_FORM, APPEAL_FORM, labelsOf } from "./issue-forms.mjs";
@@ -107,7 +107,7 @@ export async function handleIssue(issue, { api, repo, log = console.log, appeal 
   let pr = open[0];
   if (!pr) {
     try {
-      pr = await api("/pulls", { method: "POST", body: { title: "update", head: branch, base: "main", body: `Registration from #${issue.number} (issue form, opened by ${quote(issue.user.login, 40)}). ${kind === "app" ? "Applications that pass the automated review are merged automatically." : "Identity providers are reviewed by a maintainer."}` } });
+      pr = await api("/pulls", { method: "POST", body: { title: "update", head: branch, base: "main", body: `Registration from #${issue.number} (issue form, opened by ${quote(issue.user.login, 40)}). Entries that pass the automated review are merged automatically.` } });
     } catch (e) {
       // The organization may not allow the workflow token to open pull
       // requests: the branch is ready, a maintainer opens it.
@@ -119,12 +119,12 @@ export async function handleIssue(issue, { api, repo, log = console.log, appeal 
     }
   }
   const steps = kind === "app" ? clientInstructions(entry) : idpInstructions(entry);
-  await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}${logo ? ` and ${quote(logo.path)}` : ""}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\n${kind === "app" ? "When the checks pass and the domain is proven, it is merged automatically (the automatic review runs twice an hour) and live about 5 minutes after the merge." : "A maintainer reviews identity providers (docs/registry.md)."}`);
+  await comment(`Pull request #${pr.number} ${open[0] ? "updated" : "opened"} with ${quote(path)}${logo ? ` and ${quote(logo.path)}` : ""}.\n\n${steps.map((s) => `    ${s}`).join("\n")}\n\nWhen the checks pass and the domain is proven, it is merged automatically (the automatic review runs twice an hour) and live about 5 minutes after the merge.${kind === "idp" && /^client_secret_/.test(entry.client_auth || "") ? " With a client secret, the provider is offered once the secret has been handed over privately (SECURITY.md)." : ""}`);
   log(`#${issue.number}: ${open[0] ? "updated" : "opened"} PR #${pr.number} (${path})`);
   // Pull requests opened with the workflow token do not start pull_request
   // workflows: run the check for the branch, then the automatic review.
   const head = put && put.commit && put.commit.sha;
-  if (head) await checkThenMerge(api, { branch, sha: head, pr: kind === "app" ? pr.number : null, log, ...(sleep ? { sleep } : {}) });
+  if (head) await checkThenMerge(api, { branch, sha: head, pr: pr.number, log, ...(sleep ? { sleep } : {}) });
   return { action: open[0] ? "updated" : "opened", pr: pr.number, path, entry };
 }
 

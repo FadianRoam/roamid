@@ -1,5 +1,5 @@
 name: Register an identity provider / 登记身份提供方
-description: Without git. A bot turns this form into a pull request; identity providers are reviewed by a maintainer. / 无需 git。机器人把表单转为拉取请求；身份提供方由维护者审核。
+description: Without git. A bot turns this form into a pull request, merged automatically when the domain is proven and the checks pass. / 无需 git。机器人把表单转为拉取请求，域名证明且检查通过后自动合并。
 title: "Register identity provider / 登记身份提供方"
 labels: [registration, identity-provider]
 body:
