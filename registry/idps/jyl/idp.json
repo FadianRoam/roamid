@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../schema/idp.schema.json",
+  "id": "jyl",
+  "protocol": "oidc",
+  "name": {
+    "en": "JianyueLab Account",
+    "zh": "JianyueLab 通行证"
+  },
+  "issuer": "https://passport-api.jianyuelab.co/account/oauth",
+  "homepage": "https://account.jianyuelab.co",
+  "contact": {
+    "github": "launchpad001",
+    "email": "i@launchpadx.top"
+  },
+  "client_id": "roamid",
+  "client_auth": "client_secret_basic",
+  "scopes": [
+    "openid",
+    "email",
+    "profile"
+  ],
+  "status": "active"
+}
