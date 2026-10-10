@@ -11,17 +11,31 @@ import { appEntry, loadApp } from "../apps/store.js";
 import { reviewEntry, checkAppDomain, settleStatus } from "../apps/review.js";
 import { LIMITS } from "../apps/checks.js";
 import { recordDecision, redactReportText } from "../apps/transparency.js";
-import { pickLang, pickTheme, t, localName } from "../ui/i18n.js";
+import { pickLang, pickTheme, t, localName, localPath } from "../ui/i18n.js";
+import { norm, idpHost } from "../ui/list.js";
 import { newNonce } from "../lib/http.js";
 import { loginStart, loginCallback, getSession, logoutSession, readPost, isOperator, verifiedEmail } from "./session.js";
 import * as V from "./views.js";
 
-const view = (request, extra = {}) => { const u = new URL(request.url); return { lang: pickLang(request), theme: pickTheme(request), nonce: newNonce(), path: u.pathname + u.search, ...extra }; };
-const back = (path, msg) => redirect(`${path}${msg ? `?msg=${msg}` : ""}`, { status: 303 });
-const badRequest = (request) => html(`<!doctype html><title>400</title><p>Bad request (form expired or not from this site). <a href="/console">Console</a></p>`, { status: 400 });
+// path: this page's URL in its language (the router strips /zh/ and passes the language).
+const view = (request, extra = {}) => { const u = new URL(request.url); const lang = pickLang(request); return { lang, theme: pickTheme(request), nonce: newNonce(), path: localPath(lang, u.pathname) + u.search, ...extra }; };
+// A redirect to a console or operator page in the language of `v`.
+const back = (v, path, msg) => redirect(`${localPath(v.lang, path)}${msg ? `?msg=${msg}` : ""}`, { status: 303 });
+// A form post without a valid session token: the page the form was on, to submit again.
+const formPage = (p) => p.replace(/^(\/console\/app\/[a-z0-9-]+)\/[a-z/]+$/, "$1").replace(/^(\/admin\/target\/(?:app|idp)\/[a-z0-9-]+)\/[a-z_]+$/, "$1").replace(/^\/console\/logout$/, "/console");
+const badRequest = (request, v) => html(V.expiredPage(v, { back: formPage(new URL(request.url).pathname) }), { status: 400 });
 
+// actor: a console session ({ sub, email }) or a fixed name ("system", "github").
 async function audit(env, actor, kind, id, action, reason = null, reportId = null) {
-  await env.DB.prepare("INSERT INTO audit (at, actor, target_kind, target_id, action, reason, report_id) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(now(), actor, kind, id, action, reason, reportId).run();
+  const sub = typeof actor === "string" ? actor : actor.sub, email = typeof actor === "string" ? null : actor.email || null;
+  await env.DB.prepare("INSERT INTO audit (at, actor, actor_email, target_kind, target_id, action, reason, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(now(), sub, email, kind, id, action, reason, reportId).run();
+}
+
+// The session's identity provider by name, for the user bar.
+function withIdpName(s, reg, lang) {
+  if (!s) return s;
+  const i = reg.idps.get(s.idp);
+  return { ...s, idp_name: i ? localName(i, lang) : s.idp };
 }
 
 // ---- form <-> entry -------------------------------------------------------------
@@ -111,10 +125,10 @@ async function appPageData(env, request, s, clientId, extra = {}) {
   const byDay = new Map();
   for (const e of ev || []) {
     const d = byDay.get(e.day) || { day: e.day, started: 0, completed: 0, failed: 0, codes: [] };
-    if (e.kind === "failed") { d.failed += e.n; d.codes.push(`${e.code || "?"} ${e.n}`); } else if (e.kind in d) d[e.kind] += e.n;
+    if (e.kind === "failed") { d.failed += e.n; d.codes.push({ code: e.code || null, n: e.n }); } else if (e.kind in d) d[e.kind] += e.n;
     byDay.set(e.day, d);
   }
-  const stats = [...byDay.values()].map((d) => ({ ...d, codes: d.codes.join(", ") }));
+  const stats = [...byDay.values()];
   const openAppeal = await env.DB.prepare("SELECT 1 FROM reports WHERE kind = 'appeal' AND target_id = ? AND state = 'open'").bind(clientId).first();
   const msg = new URL(request.url).searchParams.get("msg");
   return { s, app: appEntry(row), row, owners: owners || [], audit: auditRows || [], stats, role, openAppeal: !!openAppeal, base: env.BASE_URL, msg: /^[a-z_]{1,30}$/.test(msg || "") ? msg : null, ...extra };
@@ -124,14 +138,15 @@ export async function handleConsole(request, env, p) {
   const m = request.method;
   if (p === "/console/login") return loginStart(request, env);
   if (p === "/console/callback") return loginCallback(request, env);
-  const s = await getSession(request, env);
-  const v = view(request, { operator: isOperator(env, s) });
-  if (p === "/console/logout") { if (m === "POST" && (await readPost(request, env, s))) return logoutSession(request, env); return redirect("/console"); }
+  const reg = await getRegistry(env);
+  const v0 = view(request);
+  const s = withIdpName(await getSession(request, env), reg, v0.lang);
+  const v = { ...v0, operator: isOperator(env, s) };
+  if (p === "/console/logout") { const lf = m === "POST" ? await readPost(request, env, s) : null; if (lf) return logoutSession(request, env, { lang: v.lang, then: lf.get("then") }); return redirect(localPath(v.lang, "/console")); }
   if (!s) {
     if (p === "/console") return html(V.consoleLanding(v, { msg: ["expired", "failed"].includes(new URL(request.url).searchParams.get("signin")) ? new URL(request.url).searchParams.get("signin") : null }));
-    return redirect(`/console/login?next=${encodeURIComponent(p)}`, { status: 303 });
+    return redirect(`/console/login?next=${encodeURIComponent(localPath(v.lang, p))}`, { status: 303 });
   }
-  const reg = await getRegistry(env);
   const activeIdps = [...reg.idps.values()].filter((i) => i.status === "active");
 
   if (p === "/console" && m === "GET") {
@@ -149,7 +164,7 @@ export async function handleConsole(request, env, p) {
     const title = t(v.lang, "c_new");
     if (m === "GET") return html(V.appForm(v, { s, idps: activeIdps, action: "/console/new", title, submit: t(v.lang, "c_create"), f: { protocol: "oidc", subject_type: "public" } }));
     const f = await readPost(request, env, s);
-    if (!f) return badRequest(request);
+    if (!f) return badRequest(request, v);
     if (!(await allow(env, "console", s.sub))) return html(V.appForm(v, { s, idps: activeIdps, action: "/console/new", title, submit: t(v.lang, "c_create"), f: readAppForm(f), errors: [{ code: "rate", field: "-", message: "too many requests; wait a minute" }] }), { status: 429 });
     const vals = readAppForm(f);
     const clientId = `app-${randomToken(9).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10).padEnd(10, "0")}`;
@@ -162,7 +177,7 @@ export async function handleConsole(request, env, p) {
       env.DB.prepare(`INSERT INTO apps (client_id, protocol, name_en, name_zh, domain, homepage, config, secret_sha256, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'development', ?, ?, ?)`)
         .bind(clientId, vals.protocol, vals.name_en, vals.name_zh || null, vals.domain, vals.homepage, JSON.stringify(config), secret ? await sha256hex(secret) : null, s.sub, t0, t0),
       env.DB.prepare("INSERT INTO app_owners (client_id, sub, role, email, added_at) VALUES (?, ?, 'owner', ?, ?)").bind(clientId, s.sub, s.email, t0),
-      env.DB.prepare("INSERT INTO audit (at, actor, target_kind, target_id, action, reason) VALUES (?, ?, 'app', ?, 'created', NULL)").bind(t0, s.sub, clientId),
+      env.DB.prepare("INSERT INTO audit (at, actor, actor_email, target_kind, target_id, action, reason) VALUES (?, ?, ?, 'app', ?, 'created', NULL)").bind(t0, s.sub, s.email || null, clientId),
     ]);
     await checkAppDomain(env, await loadApp(env, clientId));
     return html(V.appPage(v, await appPageData(env, request, s, clientId, { secret, msg: "created" })));
@@ -180,105 +195,111 @@ export async function handleConsole(request, env, p) {
     if (!s.email || s.email.toLowerCase() !== inv.email) return html(V.invitePage(v, { s, error: "expired" }), { status: 404 });
     if (verifiedEmail(s) !== inv.email) return html(V.invitePage(v, { s, error: "authority", domain: inv.email.split("@")[1] }), { status: 403 });
     if (m === "GET") return html(V.invitePage(v, { s, invite: inv, app: appEntry(app), ok: mm[1] }));
-    if (!(await readPost(request, env, s))) return badRequest(request);
+    if (!(await readPost(request, env, s))) return badRequest(request, v);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM app_owners WHERE client_id = ?").bind(inv.client_id).first();
     if (n.n >= 10) return html(V.invitePage(v, { s, error: "full" }), { status: 409 });
     await env.DB.batch([
       env.DB.prepare("INSERT INTO app_owners (client_id, sub, role, email, added_at) VALUES (?, ?, 'co-owner', ?, ?) ON CONFLICT DO NOTHING").bind(inv.client_id, s.sub, s.email, now()),
       env.DB.prepare("DELETE FROM app_invites WHERE token_hash = ?").bind(hash),
     ]);
-    await audit(env, s.sub, "app", inv.client_id, "owner_added", s.email);
-    return back(`/console/app/${inv.client_id}`, "joined");
+    await audit(env, s, "app", inv.client_id, "owner_added", s.email);
+    return back(v, `/console/app/${inv.client_id}`, "joined");
   }
 
   if (!(mm = /^\/console\/app\/(app-[a-z0-9]{6,40})(\/[a-z/]+)?$/.exec(p))) return null;
   const clientId = mm[1], sub = mm[2] || "";
   const data = await appPageData(env, request, s, clientId);
-  if (!data) return html(V.forbiddenPage(v, { s }), { status: 404 });
+  if (!data) return html(V.appNotFoundPage(v, { s }), { status: 404 });
   const row = data.row, role = data.role;
+  const appHref = `/console/app/${clientId}`;
+  const editForm = (o) => V.appForm(v, { s, idps: activeIdps, action: `${appHref}/edit`, title: `${t(v.lang, "c_edit")}: ${localName(data.app, v.lang)}`, submit: t(v.lang, "c_save"), appHref, ...o });
   if (sub === "" && m === "GET") return html(V.appPage(v, data));
-  if (sub === "/edit" && m === "GET") return html(V.appForm(v, { s, idps: activeIdps, action: `/console/app/${clientId}/edit`, title: `${t(v.lang, "c_edit")}: ${localName(data.app, v.lang)}`, submit: t(v.lang, "c_save"), f: formFromRow(row) }));
+  if (sub === "/edit" && m === "GET") return html(editForm({ f: formFromRow(row) }));
   if (m !== "POST") return null;
   const f = await readPost(request, env, s);
-  if (!f) return badRequest(request);
-  if (!(await allow(env, "console", s.sub))) return html("<!doctype html><p>Too many requests.</p>", { status: 429 });
+  if (!f) return badRequest(request, v);
+  if (!(await allow(env, "console", s.sub))) {
+    // The form again (with what was typed), or the application page, saying how long to wait.
+    if (sub === "/edit") return html(editForm({ f: readAppForm(f), errors: [{ code: "rate", field: "-", message: "" }] }), { status: 429 });
+    return html(V.appPage(v, { ...data, msg: "rate" }), { status: 429 });
+  }
   const frozen = row.status === "suspended" || row.status === "banned";
 
   if (sub === "/edit") {
     const vals = readAppForm(f);
-    const title = `${t(v.lang, "c_edit")}: ${localName(data.app, v.lang)}`;
-    if (frozen) return html(V.appForm(v, { s, idps: activeIdps, action: `/console/app/${clientId}/edit`, title, submit: t(v.lang, "c_save"), f: vals, errors: [{ code: "frozen", field: "-", message: "suspended or banned applications cannot be changed" }] }), { status: 409 });
+    if (frozen) return html(editForm({ f: vals, errors: [{ code: "frozen", field: "-", message: "" }] }), { status: 409 });
     const { errors, config } = await reviewForm(env, reg, clientId, vals, { editing: true });
-    if (errors.length) return html(V.appForm(v, { s, idps: activeIdps, action: `/console/app/${clientId}/edit`, title, submit: t(v.lang, "c_save"), f: vals, errors }), { status: 422 });
+    if (errors.length) return html(editForm({ f: vals, errors }), { status: 422 });
     let secret = null, secretHash = row.secret_sha256, old = row.secret_sha256_old;
     if (SECRET_METHODS.has(config.token_endpoint_auth_method) && !row.secret_sha256) { secret = randomToken(32); secretHash = await sha256hex(secret); }
     if (!SECRET_METHODS.has(config.token_endpoint_auth_method)) { secretHash = null; old = null; }
     const domainChanged = vals.domain !== row.domain;
     await env.DB.prepare(`UPDATE apps SET protocol = ?, name_en = ?, name_zh = ?, domain = ?, homepage = ?, config = ?, secret_sha256 = ?, secret_sha256_old = ?, updated_at = ?${domainChanged ? ", domain_verified_at = NULL, domain_failing_since = NULL, domain_checked_at = NULL" : ""} WHERE client_id = ?`)
       .bind(vals.protocol, vals.name_en, vals.name_zh || null, vals.domain, vals.homepage, JSON.stringify(config), secretHash, old, now(), clientId).run();
-    await audit(env, s.sub, "app", clientId, "edited", domainChanged ? `domain ${vals.domain}` : null);
+    await audit(env, s, "app", clientId, "edited", domainChanged ? `domain ${vals.domain}` : null);
     const fresh = await loadApp(env, clientId);
     if (domainChanged) await checkAppDomain(env, fresh); else await settleStatus(env, fresh);
     return html(V.appPage(v, await appPageData(env, request, s, clientId, { secret, msg: "saved" })));
   }
-  if (sub === "/check") { await checkAppDomain(env, row); return back(`/console/app/${clientId}`, "checked"); }
+  if (sub === "/check") { const r = await checkAppDomain(env, row); return back(v, appHref, r.ok ? "checked_ok" : "checked_fail"); }
   if (sub === "/secret") {
-    if (frozen || !SECRET_METHODS.has(data.app.token_endpoint_auth_method)) return badRequest(request);
+    if (frozen || !SECRET_METHODS.has(data.app.token_endpoint_auth_method)) return badRequest(request, v);
     const secret = randomToken(32);
     await env.DB.prepare("UPDATE apps SET secret_sha256_old = secret_sha256, secret_sha256 = ?, updated_at = ? WHERE client_id = ?").bind(await sha256hex(secret), now(), clientId).run();
-    await audit(env, s.sub, "app", clientId, "secret_rotated");
+    await audit(env, s, "app", clientId, "secret_rotated");
     return html(V.appPage(v, await appPageData(env, request, s, clientId, { secret, msg: "rotated" })));
   }
   if (sub === "/secret/revoke") {
     await env.DB.prepare("UPDATE apps SET secret_sha256_old = NULL, updated_at = ? WHERE client_id = ?").bind(now(), clientId).run();
-    await audit(env, s.sub, "app", clientId, "secret_revoked");
-    return back(`/console/app/${clientId}`, "revoked");
+    await audit(env, s, "app", clientId, "secret_revoked");
+    return back(v, appHref, "revoked");
   }
   if (sub === "/owners/invite") {
     const email = String(f.get("email") || "").trim().toLowerCase();
-    if (!/^[^\s@]{1,64}@[^\s@]{1,253}$/.test(email)) return back(`/console/app/${clientId}`, "bad_email");
+    if (!/^[^\s@]{1,64}@[^\s@]{1,253}$/.test(email)) return back(v, appHref, "bad_email");
     const tok = randomToken(24);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM app_invites WHERE client_id = ? AND email = ?").bind(clientId, email),
       env.DB.prepare("INSERT INTO app_invites (token_hash, client_id, email, invited_by, expires) VALUES (?, ?, ?, ?, ?)").bind(await sha256b64url(tok), clientId, email, s.sub, now() + 7 * 86400),
     ]);
-    await audit(env, s.sub, "app", clientId, "owner_invited", email);
+    await audit(env, s, "app", clientId, "owner_invited", email);
     return html(V.appPage(v, await appPageData(env, request, s, clientId, { invite: `${env.BASE_URL}/console/invite/${tok}`, msg: "invited" })));
   }
   if (sub === "/owners/remove" || sub === "/owners/transfer") {
-    if (role !== "owner") return html(V.forbiddenPage(v, { s }), { status: 403 });
+    if (role !== "owner") return html(V.ownerOnlyPage(v, { s, clientId }), { status: 403 });
     const target = String(f.get("sub") || "");
     const tr = await env.DB.prepare("SELECT * FROM app_owners WHERE client_id = ? AND sub = ? AND role = 'co-owner'").bind(clientId, target).first();
-    if (!tr) return badRequest(request);
+    if (!tr) return badRequest(request, v);
     if (sub === "/owners/remove") {
       await env.DB.prepare("DELETE FROM app_owners WHERE client_id = ? AND sub = ?").bind(clientId, target).run();
-      await audit(env, s.sub, "app", clientId, "owner_removed", tr.email);
-      return back(`/console/app/${clientId}`, "removed");
+      await audit(env, s, "app", clientId, "owner_removed", tr.email);
+      return back(v, appHref, "removed");
     }
     await env.DB.batch([
       env.DB.prepare("UPDATE app_owners SET role = 'owner' WHERE client_id = ? AND sub = ?").bind(clientId, target),
       env.DB.prepare("UPDATE app_owners SET role = 'co-owner' WHERE client_id = ? AND sub = ?").bind(clientId, s.sub),
     ]);
-    await audit(env, s.sub, "app", clientId, "transferred", tr.email);
-    return back(`/console/app/${clientId}`, "transferred");
+    await audit(env, s, "app", clientId, "transferred", tr.email);
+    return back(v, appHref, "transferred");
   }
   if (sub === "/appeal") {
-    if (!frozen) return badRequest(request);
+    if (!frozen) return badRequest(request, v);
     const text = String(f.get("text") || "").trim().slice(0, 4000);
-    if (text.length < 5) return back(`/console/app/${clientId}`, "appeal_short");
+    if (text.length < 5) return back(v, appHref, "appeal_short");
     const id = await createReport(env, { kind: "appeal", target_kind: "app", target_id: clientId, category: "appeal", description: text, contact_email: s.email, context: null, reporter_hash: await sha256b64url(`appeal|${s.sub}`) });
-    await audit(env, s.sub, "app", clientId, "appeal", null, id);
-    return back(`/console/app/${clientId}`, "appealed");
+    await audit(env, s, "app", clientId, "appeal", null, id);
+    return back(v, appHref, "appealed");
   }
   if (sub === "/delete") {
-    if (role !== "owner" || frozen || f.get("confirm") !== "yes") return badRequest(request);
+    if (role !== "owner") return html(V.ownerOnlyPage(v, { s, clientId }), { status: 403 });
+    if (frozen || f.get("confirm") !== "yes") return badRequest(request, v);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM apps WHERE client_id = ?").bind(clientId),
       env.DB.prepare("DELETE FROM app_owners WHERE client_id = ?").bind(clientId),
       env.DB.prepare("DELETE FROM app_invites WHERE client_id = ?").bind(clientId),
-      env.DB.prepare("INSERT INTO audit (at, actor, target_kind, target_id, action) VALUES (?, ?, 'app', ?, 'deleted')").bind(now(), s.sub, clientId),
+      env.DB.prepare("INSERT INTO audit (at, actor, actor_email, target_kind, target_id, action) VALUES (?, ?, ?, 'app', ?, 'deleted')").bind(now(), s.sub, s.email || null, clientId),
     ]);
-    return back("/console", null);
+    return back(v, "/console", null);
   }
   return null;
 }
@@ -356,6 +377,38 @@ async function targetOf(env, kind, id) {
   return null;
 }
 
+// Applications, identity providers and console applications whose name,
+// domain or identifier matches `q` (normalized): exact matches first.
+// { kind, id, name, domain, exact }.
+async function findTargets(env, q, lang, { limit = 50 } = {}) {
+  const n = norm(q);
+  if (!n) return [];
+  const reg = await getRegistry(env);
+  const out = [];
+  const add = (kind, id, names, domains) => {
+    const keys = [names && names.en, names && names.zh, id, ...domains].filter(Boolean).map(norm);
+    const exact = keys.includes(n);
+    if (exact || keys.some((k) => k.includes(n))) out.push({ kind, id, name: localName({ name: names }, lang) || id, domain: domains[0] || null, exact });
+  };
+  const hostOf = (u) => { try { return new URL(u).host; } catch { return null; } };
+  for (const i of reg.idps.values()) add("idp", i.id, i.name, [idpHost(i), ...(i.email_domains || [])].filter(Boolean));
+  for (const c of reg.clients.values()) add("app", c.client_id, c.name, [c.domain || hostOf(c.homepage)].filter(Boolean));
+  const { results } = await env.DB.prepare("SELECT client_id, name_en, name_zh, domain FROM apps").all();
+  for (const r of results || []) if (!reg.clients.has(r.client_id)) add("app", r.client_id, { en: r.name_en, ...(r.name_zh ? { zh: r.name_zh } : {}) }, [r.domain]);
+  out.sort((a, b) => (b.exact - a.exact) || a.name.localeCompare(b.name));
+  return out.slice(0, limit);
+}
+
+// What the report form offers: the applications people can sign in to and
+// the identity providers that are not disabled, by name.
+async function reportOptions(env, lang) {
+  const reg = await getRegistry(env);
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const apps = (await publicApps(env)).map((a) => ({ id: a.client_id, names: a.name, name: localName(a, lang), domain: a.domain })).sort(byName);
+  const idps = [...reg.idps.values()].filter((i) => i.status !== "disabled").map((i) => ({ id: i.id, names: i.name, name: localName(i, lang), domain: idpHost(i) })).sort(byName);
+  return { apps, idps };
+}
+
 export async function handleReport(request, env) {
   const v = view(request);
   const headers = { "Content-Security-Policy": REPORT_CSP };
@@ -364,29 +417,41 @@ export async function handleReport(request, env) {
     const q = new URL(request.url).searchParams;
     const target = q.get("app") ? await targetOf(env, "app", q.get("app")) : q.get("idp") ? await targetOf(env, "idp", q.get("idp")) : null;
     const tx = /^[A-Za-z0-9_-]{10,64}$/.test(q.get("tx") || "") ? q.get("tx") : "";
-    return html(V.reportPage(v, { target, targetName: target && localName(target, v.lang), tx, check }), { headers });
+    return html(V.reportPage(v, { target, targetName: target && localName(target, v.lang), tx, check, options: target ? undefined : await reportOptions(env, v.lang) }), { headers });
   }
   if (request.method !== "POST") return null;
   const f = await readForm(request);
-  if (!f) return html(V.reportPage(v, { check, errors: ["form"] }), { status: 400, headers });
+  if (!f) return html(V.reportPage(v, { check, errors: ["form"], options: await reportOptions(env, v.lang) }), { status: 400, headers });
   const ip = await clientIp(request, env);
-  const fv = { target_id: String(f.get("target_id") || "").slice(0, 80), category: String(f.get("category") || ""), description: String(f.get("description") || "").trim().slice(0, 4000), contact_email: String(f.get("contact_email") || "").trim().slice(0, 254) };
-  let target = null;
   const tv = String(f.get("target") || "");
+  const fv = { target: tv, target_id: String(f.get("target_id") || "").slice(0, 120), target_kind: f.get("target_kind") === "idp" ? "idp" : "app", category: String(f.get("category") || ""), description: String(f.get("description") || "").trim().slice(0, 4000), contact_email: String(f.get("contact_email") || "").trim().slice(0, 254), no_publish: f.get("no_publish") === "yes" };
+  let target = null;
+  // The chosen entry; else the identifier typed in (or an exact, unique name or domain).
   if (/^(app|idp):[a-z0-9-]{2,64}$/.test(tv)) target = await targetOf(env, tv.split(":")[0], tv.split(":")[1]);
-  else if (fv.target_id) target = await targetOf(env, f.get("target_kind") === "idp" ? "idp" : "app", fv.target_id.trim());
+  else if (fv.target_id.trim()) {
+    const typed = fv.target_id.trim();
+    target = /^[a-z0-9-]{2,64}$/.test(typed) ? await targetOf(env, fv.target_kind, typed) : null;
+    if (!target) {
+      const exact = (await findTargets(env, typed, v.lang)).filter((x) => x.exact);
+      const sameKind = exact.filter((x) => x.kind === fv.target_kind);
+      const pick = sameKind.length === 1 ? sameKind : exact;
+      if (pick.length === 1) target = await targetOf(env, pick[0].kind, pick[0].id);
+    }
+  }
   const errors = [];
   if (!target) errors.push("target");
   if (!V.CATEGORIES.includes(fv.category)) errors.push("category");
   if (fv.description.length < 10) errors.push("description");
   if (fv.contact_email && !/^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/.test(fv.contact_email)) errors.push("email");
-  const render = (errs, status) => html(V.reportPage(v, { target: tv && target ? target : null, targetName: target && localName(target, v.lang), tx: f.get("tx") || "", check, errors: errs, f: fv }), { status, headers });
-  if (errors.length) return render(errors, 400);
-  if (!(await allow(env, "report", ip))) return render(["rate"], 429);
+  // A target fixed by the page the report came from (?app= / ?idp=) stays fixed; otherwise the list again.
+  const fixed = f.get("fixed") === "1" && target;
+  const render = async (errs, status) => html(V.reportPage(v, { target: fixed ? target : null, targetName: target && localName(target, v.lang), tx: f.get("tx") || "", check, errors: errs, f: { ...fv, target: target ? `${target.kind}:${target.id}` : tv }, options: fixed ? undefined : await reportOptions(env, v.lang) }), { status, headers });
+  if (errors.length) return await render(errors, 400);
+  if (!(await allow(env, "report", ip))) return await render(["rate"], 429);
   // The platform's human check, when it has one (off by default: the rate limits apply).
   if (humanCheck.field) {
     const ok = await humanCheck.verify(env, f.get(humanCheck.field), ip).catch(() => "verify_unavailable");
-    if (ok !== true) { const code = ["verify_required", "verify_failed", "verify_unavailable"].includes(ok) ? ok : "verify_failed"; return render([code], code === "verify_unavailable" ? 503 : 403); }
+    if (ok !== true) { const code = ["verify_required", "verify_failed", "verify_unavailable"].includes(ok) ? ok : "verify_failed"; return await render([code], code === "verify_unavailable" ? 503 : 403); }
   }
   // Context: the sign-in in progress (which application, which provider), no personal data.
   let context = null;
@@ -406,11 +471,11 @@ const UPHOLDING = new Set(["warn", "suspend", "ban", "idp_disable"]);
 const IDP_ACTIONS = { dismiss: "dismiss", idp_disable: "idp_disable", idp_enable: "idp_enable", publish: "publish" };
 
 export async function handleAdmin(request, env, p) {
-  const s = await getSession(request, env);
   const v = view(request);
-  if (!s) return redirect(`/console/login?next=${encodeURIComponent(p)}`, { status: 303 });
-  if (!isOperator(env, s)) return html(V.forbiddenPage(v, { s }), { status: 403 });
   const reg = await getRegistry(env);
+  const s = withIdpName(await getSession(request, env), reg, v.lang);
+  if (!s) return redirect(`/console/login?next=${encodeURIComponent(localPath(v.lang, p) + new URL(request.url).search)}`, { status: 303 });
+  if (!isOperator(env, s)) return html(V.forbiddenPage(v, { s }), { status: 403 });
   const nameOf = async (kind, id) => { const tg = await targetOf(env, kind, id); return tg ? localName(tg, v.lang) : id; };
 
   if (p === "/admin/reports" && request.method === "GET") {
@@ -431,18 +496,25 @@ export async function handleAdmin(request, env, p) {
     // Priority: distinct reporters in 24 hours, then appeals, then the newest.
     items.sort((a, b) => b.reporters24 - a.reporters24 || b.appeals - a.appeals || b.latest - a.latest);
     const { results: recent } = await env.DB.prepare("SELECT * FROM audit WHERE actor != 'system' ORDER BY at DESC, id DESC LIMIT 20").all();
+    const names = new Map();
+    for (const r of recent || []) { const k = `${r.target_kind}:${r.target_id}`; if (!names.has(k)) names.set(k, await nameOf(r.target_kind, r.target_id)); r.name = names.get(k); }
     return html(V.adminQueue({ ...v }, { s, items, recent: recent || [] }));
   }
   if (p === "/admin/target" && request.method === "GET") {
-    const id = String(new URL(request.url).searchParams.get("id") || "").trim();
-    const kind = reg.idps.has(id) ? "idp" : "app";
-    return redirect(`/admin/target/${kind}/${encodeURIComponent(id)}`, { status: 303 });
+    // By identifier, name or domain: one exact match (or a single match) opens it, otherwise the list.
+    const sp = new URL(request.url).searchParams;
+    const q = String(sp.get("q") || sp.get("id") || "").trim().slice(0, 120);
+    const results = await findTargets(env, q, v.lang);
+    const exact = results.filter((r) => r.exact);
+    const one = exact.length === 1 ? exact[0] : results.length === 1 ? results[0] : null;
+    if (one) return back(v, `/admin/target/${one.kind}/${one.id}`, null);
+    return html(V.adminSearch(v, { s, q, results }), { status: results.length ? 200 : 404 });
   }
   const mm = /^\/admin\/target\/(app|idp)\/([a-z0-9-]{2,64})(?:\/([a-z_]+))?$/.exec(p);
   if (!mm) return null;
   const [, kind, id, action] = mm;
   const target = await targetOf(env, kind, id);
-  if (!target) return html(V.forbiddenPage(v, { s }), { status: 404 });
+  if (!target) return html(V.adminNotFound(v, { s }), { status: 404 });
   const row = kind === "app" ? await loadApp(env, id) : null;
   if (!action && request.method === "GET") {
     const { results: reports } = await env.DB.prepare("SELECT * FROM reports WHERE target_kind = ? AND target_id = ? ORDER BY state = 'open' DESC, created_at DESC LIMIT 200").bind(kind, id).all();
@@ -468,12 +540,12 @@ export async function handleAdmin(request, env, p) {
   }
   if (request.method !== "POST" || !action) return null;
   const f = await readPost(request, env, s);
-  if (!f) return badRequest(request);
+  if (!f) return badRequest(request, v);
   const reason = String(f.get("reason") || "").trim().slice(0, 500) || null;
   const valid = kind === "app" ? APP_ACTIONS[action] : IDP_ACTIONS[action];
-  if (!valid || (!reason && action !== "dismiss" && action !== "publish")) return back(`/admin/target/${kind}/${id}`, null);
+  if (!valid || (!reason && action !== "dismiss" && action !== "publish")) return back(v, `/admin/target/${kind}/${id}`, null);
   const t0 = now();
-  if (action === "publish") return publishReport(request, env, s, kind, id, f);
+  if (action === "publish") return publishReport(v, env, s, kind, id, f);
   // The basis of the decision: the open items the operator ticked. Only those
   // are closed; a report becomes "upheld" only when ticked for warn, suspend,
   // ban or an identity provider disable. Without a ticked report such an
@@ -483,12 +555,12 @@ export async function handleAdmin(request, env, p) {
   const ticked = (openItems || []).filter((r) => wanted.has(r.id));
   const tickedReports = ticked.filter((r) => r.kind === "report");
   const upholds = UPHOLDING.has(action);
-  if (action === "dismiss" && !ticked.length) return back(`/admin/target/${kind}/${id}`, null);
-  if (upholds && !tickedReports.length && f.get("own_initiative") !== "yes") return back(`/admin/target/${kind}/${id}`, null);
+  if (action === "dismiss" && !ticked.length) return back(v, `/admin/target/${kind}/${id}`, null);
+  if (upholds && !tickedReports.length && f.get("own_initiative") !== "yes") return back(v, `/admin/target/${kind}/${id}`, null);
   if (action === "dismiss") {
     for (const r of ticked) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = CASE WHEN kind = 'report' THEN 'dismissed' ELSE outcome END, closed_by = ?, closed_at = ? WHERE id = ? AND state = 'open'").bind(s.sub, t0, r.id).run();
   } else if (kind === "app") {
-    if (!row) return back(`/admin/target/${kind}/${id}`, null);
+    if (!row) return back(v, `/admin/target/${kind}/${id}`, null);
     if (action === "suspend" || action === "ban") {
       await env.DB.prepare("UPDATE apps SET status = ?, status_reason = ?, updated_at = ? WHERE client_id = ?").bind(action === "ban" ? "banned" : "suspended", reason, t0, id).run();
       if (action === "ban") await env.DB.prepare("INSERT INTO banned_domains (domain, client_id, at, reason) VALUES (?, ?, ?, ?) ON CONFLICT(domain) DO NOTHING").bind(row.domain, id, t0, reason).run();
@@ -507,32 +579,32 @@ export async function handleAdmin(request, env, p) {
     await env.DB.prepare("DELETE FROM idp_overrides WHERE idp = ?").bind(id).run();
     resetMemo();
   }
-  await audit(env, s.sub, kind, id, action, reason);
+  await audit(env, s, kind, id, action, reason);
   // The public record (transparency.json): no reporter data, no operator id.
   const decisionId = await recordDecision(env, { kind, id, domain: row ? row.domain : null, decision: action, reason, categories: upholds ? tickedReports.map((r) => r.category) : [] });
   // The ticked reports are upheld by exactly this decision.
   if (upholds) for (const r of tickedReports) await env.DB.prepare("UPDATE reports SET state = 'closed', outcome = 'upheld', decision_id = ?, closed_by = ?, closed_at = ? WHERE id = ? AND state = 'open'").bind(decisionId, s.sub, t0, r.id).run();
-  return back(`/admin/target/${kind}/${id}`, null);
+  return back(v, `/admin/target/${kind}/${id}`, null);
 }
 
 // Publish one closed report after review. The text is redacted again here;
 // a reporter who opted out gets category and decision only; a dismissed
 // report needs an explicit choice.
-async function publishReport(request, env, s, kind, id, f) {
+async function publishReport(v, env, s, kind, id, f) {
   const rep = await env.DB.prepare("SELECT * FROM reports WHERE id = ? AND target_kind = ? AND target_id = ? AND kind = 'report' AND state = 'closed'").bind(String(f.get("report_id") || ""), kind, id).first();
-  if (!rep) return back(`/admin/target/${kind}/${id}`, null);
-  if (rep.outcome !== "upheld" && f.get("publish_dismissed") !== "yes") return back(`/admin/target/${kind}/${id}`, null);
+  if (!rep) return back(v, `/admin/target/${kind}/${id}`, null);
+  if (rep.outcome !== "upheld" && f.get("publish_dismissed") !== "yes") return back(v, `/admin/target/${kind}/${id}`, null);
   // Exactly the decision this report was upheld by; a dismissed report has none.
   const dec = rep.outcome === "upheld" && rep.decision_id ? await env.DB.prepare("SELECT id, decision FROM decisions WHERE id = ? AND target_kind = ? AND target_id = ?").bind(rep.decision_id, kind, id).first() : null;
-  if (rep.outcome === "upheld" && !dec) return back(`/admin/target/${kind}/${id}`, null);
+  if (rep.outcome === "upheld" && !dec) return back(v, `/admin/target/${kind}/${id}`, null);
   const lead = dec ? "" : "Not upheld. ";
   const text = rep.no_publish ? `Category: ${rep.category}. Decision: ${dec ? dec.decision : "not upheld"}. (The reporter asked not to publish the description.)` : redactReportText(String(f.get("text") || "")).trim();
-  if (!text) return back(`/admin/target/${kind}/${id}`, null);
+  if (!text) return back(v, `/admin/target/${kind}/${id}`, null);
   const body = (rep.no_publish ? text : lead + text).slice(0, 4000);
   await env.DB.prepare("INSERT INTO publications (at, report_id, decision_id, target_kind, target_id, category, text) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(report_id) DO NOTHING")
     .bind(now(), rep.id, dec ? dec.id : null, kind, id, rep.category, body).run();
-  await audit(env, s.sub, kind, id, "published", null, rep.id);
-  return back(`/admin/target/${kind}/${id}`, null);
+  await audit(env, s, kind, id, "published", null, rep.id);
+  return back(v, `/admin/target/${kind}/${id}`, null);
 }
 
 // POST /admin/appeal: an appeal filed as a GitHub issue (appeal form), passed

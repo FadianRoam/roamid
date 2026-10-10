@@ -211,3 +211,20 @@ code.secret { display: block; padding: 10px 12px; border-radius: 6px; background
   .idrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main logo" "host host" "st proto" "sub sub"; gap: 4px 12px; contain-intrinsic-size: auto 140px; }
   .idrow .proto { justify-self: end; }
 }
+
+/* console: invalid fields, copy buttons, technical details, failure lists */
+.field.invalid .lbl, .check.invalid { color: var(--bad); }
+.field.invalid input, .field.invalid select, .field.invalid textarea { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+fieldset.field.invalid { box-shadow: inset 3px 0 0 var(--bad); padding-left: 10px; }
+.linkbtn.copy { margin-left: 6px; font-size: 14px; }
+.linkbtn.copy.done { color: var(--ok); }
+details.tech, details.manual { margin: 8px 0 0; }
+details.tech summary, details.manual summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+details.manual[open] { margin-bottom: 14px; }
+details.manual .field { margin-top: 8px; }
+.fails { margin: 4px 0 0; padding-left: 1.1em; font-size: 14px; }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+ul.plain li:last-child { border-bottom: 0; }
+#no-apps .steps { margin: 8px 0 12px; }
+.target-q { margin-bottom: 6px; }

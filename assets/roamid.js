@@ -133,6 +133,50 @@
     q.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); if (e.key === "Escape" && q.value) { q.value = ""; run(); } });
   });
 
+  // Copy buttons: the text of the element named by data-copy (console secrets, links, identifiers).
+  $$("button[data-copy]").forEach(function (b) {
+    var src = document.getElementById(b.getAttribute("data-copy"));
+    if (!src || !navigator.clipboard) return;
+    var label = b.textContent;
+    b.hidden = false;
+    b.addEventListener("click", function () {
+      navigator.clipboard.writeText(src.textContent.trim()).then(function () {
+        b.textContent = b.getAttribute("data-done"); b.classList.add("done");
+        setTimeout(function () { b.textContent = label; b.classList.remove("done"); }, 2000);
+      }, function () {});
+    });
+  });
+
+  // Report form: a search field over the list of applications and identity
+  // providers (the list itself works without scripts).
+  $$("input.target-q").forEach(function (q) {
+    var sel = document.getElementById(q.getAttribute("aria-controls"));
+    if (!sel) return;
+    var opts = $$("option[data-q]", sel);
+    q.hidden = false;
+    var run = function () {
+      var s = norm(q.value), shown = [];
+      opts.forEach(function (o) { var on = !s || o.getAttribute("data-q").indexOf(s) >= 0; o.hidden = !on; o.disabled = !on; if (on) shown.push(o); });
+      $$("optgroup", sel).forEach(function (g) { g.hidden = !$$("option[data-q]", g).some(function (o) { return !o.hidden; }); });
+      if (s && shown.length === 1) sel.value = shown[0].value;
+      else if (s && sel.selectedOptions[0] && sel.selectedOptions[0].hidden) sel.value = "";
+    };
+    q.addEventListener("input", run);
+    q.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); sel.focus(); } if (e.key === "Escape" && q.value) { q.value = ""; run(); } });
+  });
+
+  // Form errors: a click on a field's name in the list focuses that field.
+  $$("ul.errs a[data-field]").forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      var el = document.getElementById("f-" + a.getAttribute("data-field"));
+      if (!el) return;
+      e.preventDefault();
+      el.scrollIntoView({ block: "center" });
+      var input = el.matches("input,select,textarea") ? el : $("input,select,textarea", el);
+      if (input) input.focus({ preventScroll: true });
+    });
+  });
+
   // ---- SAML: post the message on load
   var ap = $("form[data-autopost]");
   if (ap) { var bt = $("button", ap); if (bt) bt.disabled = true; setTimeout(function () { ap.submit(); }, 50); setTimeout(function () { if (bt) bt.disabled = false; }, 3000); }

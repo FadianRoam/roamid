@@ -46,6 +46,10 @@ Every action is recorded with the time, the operator and the reason. Owners see 
 
 Identity providers stay under human governance: a provider is retired by a registry pull request setting `"status": "disabled"`. In an emergency the operator can disable a provider at once (an override stored by the instance); it reads as disabled everywhere until the operator removes the override.
 
+## Operator console
+
+The operator console (`/admin/reports`) is open only to the operators of the RoamID instance; the instance lists their accounts in its configuration. Everyone else sees a notice there and can use what this policy offers to the public: the report form at `/report`, the appeal on an application's console page, and the public record described below. Decisions are taken only as described under "Operator actions".
+
 ## Transparency
 
 Every operator decision is public: warn, suspend, ban and restore for applications; emergency disable and its removal for identity providers.

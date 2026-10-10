@@ -1,7 +1,8 @@
-// English and Simplified Chinese. Public pages have two URLs, /path (English)
-// and /zh/path (Chinese), and the URL decides (src/index.js sets the internal
-// x-roamid-twin header). Elsewhere (sign-in flows, console): cookie ->
-// ui_locales -> Accept-Language -> English.
+// English and Simplified Chinese. Public pages and the console have two URLs,
+// /path (English) and /zh/path (Chinese), and the URL decides (src/index.js
+// sets the internal x-roamid-twin header). Elsewhere (sign-in flows): cookie
+// -> ui_locales -> Accept-Language -> English. The console without /zh/ goes
+// to /zh/... when the cookie (or, without one, Accept-Language) says Chinese.
 
 import { getCookie } from "../lib/http.js";
 import { C, CE } from "./i18n-console.js";
@@ -11,10 +12,14 @@ export const THEME_COOKIE = "__Host-rid_theme";
 
 import { languagePaths } from "../platform/index.js";
 
-// Public pages with a /zh/ twin (and those a deployment adds).
-export const isTwinPath = (p) => ["/", "/idps", "/apps", "/status", "/demo", "/report", "/test"].includes(p) || (languagePaths(p) || []).includes("zh") || /^\/apps\/[a-z0-9-]{2,64}$/.test(p) || (/^\/test\/[a-z0-9-]{2,32}$/.test(p) && p !== "/test/callback");
+// The console and the operator queue: /console/... and /zh/console/..., like
+// the public pages, but never indexed. The sign-in redirect and its callback
+// (/console/login, /console/callback) and the APIs under /admin are one URL.
+export const isConsolePath = (p) => /^\/(console|admin)(\/|$)/.test(p) && !/^\/console\/(login|callback)$/.test(p) && !/^\/admin\/(sync|appeal)$/.test(p);
+// Pages with a /zh/ twin (and those a deployment adds).
+export const isTwinPath = (p) => ["/", "/idps", "/apps", "/status", "/demo", "/report", "/test"].includes(p) || (languagePaths(p) || []).includes("zh") || /^\/apps\/[a-z0-9-]{2,64}$/.test(p) || (/^\/test\/[a-z0-9-]{2,32}$/.test(p) && p !== "/test/callback") || isConsolePath(p);
 // Pages that exist in one URL only (the language follows the cookie): /zh/... goes there.
-export const isEnglishOnlyPath = (p) => /^\/(console|admin)(\/|$)/.test(p) || p === "/demo/saml" || JSON.stringify(languagePaths(p)) === '["en"]';
+export const isEnglishOnlyPath = (p) => /^\/console\/(login|callback)$/.test(p) || p === "/demo/saml" || JSON.stringify(languagePaths(p)) === '["en"]';
 // The URL of a public page in a language; other paths are unchanged. The
 // Chinese home page is /zh/.
 export const localPath = (lang, p) => {
@@ -97,6 +102,7 @@ const T = {
     err_code: "Error code", err_request: "Request ID",
     err_back: "Return to {rp}",
     err_home: "RoamID home",
+    err_next_back: "Return to {rp} and sign in again. If this identity provider keeps failing, choose another one.", err_details: "Technical details",
     out_title: "Signed out of RoamID",
     out_lead: "RoamID no longer remembers your identity provider choice in this browser. Your session at the identity provider is not changed.",
     demo_title: "Demo application",
@@ -166,6 +172,7 @@ const T = {
     err_code: "错误码", err_request: "请求 ID",
     err_back: "返回 {rp}",
     err_home: "RoamID 首页",
+    err_next_back: "可以返回 {rp} 重新登录；如果这个身份提供方一直失败，请换一个。", err_details: "技术细节",
     out_title: "已退出 RoamID",
     out_lead: "RoamID 已在此浏览器中清除你选择的身份提供方。你在身份提供方处的会话不受影响。",
     demo_title: "演示应用",
