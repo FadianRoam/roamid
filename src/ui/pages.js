@@ -4,7 +4,7 @@
 // src/platform/ (a deployment may replace that module). Every CSS,
 // JavaScript and image file is served from this origin (src/ui/manifest.js).
 
-import { t, errorText, localName, localPath, isTwinPath } from "./i18n.js";
+import { t, errorText, localName, localPath, isTwinPath, isConsolePath } from "./i18n.js";
 import { renderHead, stylesheets, hero, replacesBaseStylesheet } from "../platform/index.js";
 import { norm, searchText, idpHost, hostOf, orderIdps, pickerSplit, sortIdps, groupIdps, stateOf } from "./list.js";
 import { ASSETS } from "./manifest.js";
@@ -14,7 +14,7 @@ export { esc };
 export const REPO = "https://github.com/FadianRoam/roamid";
 const DOCS = { en: `${REPO}#documentation`, zh: `${REPO}/blob/main/README.zh-CN.md#文档` };
 export const REGISTRY_DOCS = { en: `${REPO}/blob/main/docs/registry.md#without-an-account-at-a-listed-identity-provider`, zh: `${REPO}/blob/main/docs/zh-CN/registry.md` };
-const RP_DOCS = { en: `${REPO}/blob/main/docs/rp-integration.md`, zh: `${REPO}/blob/main/docs/zh-CN/rp-integration.md` };
+export const RP_DOCS = { en: `${REPO}/blob/main/docs/rp-integration.md`, zh: `${REPO}/blob/main/docs/zh-CN/rp-integration.md` };
 
 const ICON = {
   system: '<path d="M3 4.5h14v9H3z"/><path d="M7 16.5h6M10 13.5v3"/>',
@@ -44,9 +44,11 @@ function nav({ lang, theme, path, active }) {
   const next = NEXT_THEME[theme];
   const themeLabel = t(lang, "theme_next", { cur: t(lang, "theme_" + theme), next: t(lang, "theme_" + next) });
   // The language link: the other language's URL of this page. Pages without
-  // a twin (sign-in flows, console) switch through /prefs, which sets the cookie.
+  // a twin (sign-in flows) switch through /prefs, which sets the cookie; so
+  // does the console, whose URL without /zh/ follows the cookie.
   const inner = String(path || "/").replace(/^\/zh(?=\/|$|\?)/, "") || "/";
-  const langLink = isTwinPath(inner.split("?")[0]) ? localPath(other, inner) : prefLink("lang", other, inner);
+  const innerPath = inner.split("?")[0];
+  const langLink = isConsolePath(innerPath) ? prefLink("lang", other, localPath(other, inner)) : isTwinPath(innerPath) ? localPath(other, inner) : prefLink("lang", other, inner);
   return `<nav class="nav" aria-label="RoamID">
 <a class="brand" href="${esc(L("/"))}">${MARK}<span>RoamID</span></a>
 <div class="links">${links.map(a).join("")}</div>
@@ -74,7 +76,7 @@ function doc({ lang, theme, title, pageTitle = title, body, head = "", descripti
   const [rawPath, query = ""] = String(path || "/").split("?");
   const enPath = rawPath.replace(/^\/zh(?=\/|$)/, "") || "/";
   // Indexable: the public pages only (not the picker, console, admin, errors, reports or test sign-ins).
-  const isPublic = !noindex && !isError && isTwinPath(enPath) && !/^\/(test|report)(\/|$)/.test(enPath);
+  const isPublic = !noindex && !isError && isTwinPath(enPath) && !isConsolePath(enPath) && !/^\/(test|report)(\/|$)/.test(enPath);
   return `<!doctype html>
 <html lang="${lang === "zh" ? "zh-CN" : "en"}"${theme !== "system" ? ` data-theme="${theme}"` : ""} data-page="${esc(page)}">
 <head>
@@ -97,7 +99,7 @@ export const baseStylesheet = (replaced) => (replaced ? "" : `<link rel="stylesh
 // The page footer, on every page: links and "Powered by YunZheng LAB".
 export function footer(lang) {
   const L = (h) => localPath(lang, h);
-  return `<footer class="foot"><nav class="foot-links" aria-label="${esc(t(lang, "footer_nav"))}"><a href="${esc(L("/"))}">RoamID</a><a href="${esc(L("/idps"))}">${esc(t(lang, "nav_idps"))}</a><a href="${esc(L("/status"))}">${esc(t(lang, "nav_status"))}</a><a href="${esc(L("/apps"))}">${esc(t(lang, "nav_apps"))}</a><a href="/console">${esc(t(lang, "c_title"))}</a><a href="${esc(L("/report"))}">${esc(t(lang, "rep_title"))}</a><a href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></nav>
+  return `<footer class="foot"><nav class="foot-links" aria-label="${esc(t(lang, "footer_nav"))}"><a href="${esc(L("/"))}">RoamID</a><a href="${esc(L("/idps"))}">${esc(t(lang, "nav_idps"))}</a><a href="${esc(L("/status"))}">${esc(t(lang, "nav_status"))}</a><a href="${esc(L("/apps"))}">${esc(t(lang, "nav_apps"))}</a><a href="${esc(L("/console"))}">${esc(t(lang, "c_title"))}</a><a href="${esc(L("/report"))}">${esc(t(lang, "rep_title"))}</a><a href="${esc(L("/demo"))}">${esc(t(lang, "nav_demo"))}</a><a href="${esc(DOCS[lang])}">${esc(t(lang, "nav_docs"))}</a><a href="${REPO}">GitHub</a></nav>
 <p class="powered"><a href="https://yunzheng.space/">${t(lang, "powered_pre") ? `<span>${esc(t(lang, "powered_pre"))}</span>` : ""}<picture><source srcset="${ASSETS["lab-logo.webp"]}" type="image/webp"><img src="${ASSETS["lab-logo.png"]}" width="72" height="32" alt="YunZheng LAB" loading="lazy" decoding="async"></picture>${t(lang, "powered_post") ? `<span>${esc(t(lang, "powered_post"))}</span>` : ""}</a></p></footer>`;
 }
 
@@ -178,9 +180,10 @@ export function postPage({ lang, theme, path, form, rpName }) {
 
 export function errorPage({ lang, theme, path, code, requestId, detail, backUrl, backForm, rpName }) {
   const body = `<h1 class="title">${esc(t(lang, "err_title"))}</h1>
-<div class="alert">${icon("alert")}<div><p>${esc(errorText(lang, code))}</p>${detail ? `<p class="mono">${esc(detail)}</p>` : ""}
+<div class="alert">${icon("alert")}<div><p>${esc(errorText(lang, code))}</p>${backUrl || backForm ? `<p>${esc(t(lang, "err_next_back", { rp: rpName || "" }))}</p>` : ""}
+${detail ? `<details class="tech"><summary>${esc(t(lang, "err_details"))}</summary><p class="mono">${esc(detail)}</p></details>` : ""}
 <div class="kv"><div>${esc(t(lang, "err_code"))}</div><div class="mono" data-code>${esc(code)}</div><div>${esc(t(lang, "err_request"))}</div><div class="mono">${esc(requestId)}</div></div></div></div>
-<div class="btnrow">${backUrl ? `<a class="pill" href="${esc(backUrl)}">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</a>` : ""}${backForm ? `<form method="post" action="${esc(backForm.action)}">${hiddenFields(backForm.fields)}<button class="pill" type="submit">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</button></form>` : ""}<a class="pill ghost" href="/">${esc(t(lang, "err_home"))}</a></div>`;
+<div class="btnrow">${backUrl ? `<a class="pill" href="${esc(backUrl)}">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</a>` : ""}${backForm ? `<form method="post" action="${esc(backForm.action)}">${hiddenFields(backForm.fields)}<button class="pill" type="submit">${icon("back")}${esc(t(lang, "err_back", { rp: rpName || "" }))}</button></form>` : ""}<a class="pill ghost" href="${esc(localPath(lang, "/"))}">${esc(t(lang, "err_home"))}</a></div>`;
   return contentPage({ lang, theme, path, active: "", title: t(lang, "err_title"), body, narrow: true, isError: true, status: ERROR_STATUS[code] || 400 });
 }
 
@@ -256,7 +259,7 @@ ${sec(t(lang, "status_counts"), kv([[t(lang, "status_started"), `${s.counts.star
 ${s.daily && s.daily.per_day.length ? sec(t(lang, "status_daily"), `<div class="scroll"><table class="tbl"><thead><tr><th>${esc(t(lang, "c_day"))}</th><th>${esc(t(lang, "status_started"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_day.map((d) => `<tr><td class="mono">${esc(d.day)}</td><td>${d.started}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>${s.daily.per_idp.length ? `<div class="scroll gap"><table class="tbl"><thead><tr><th>${esc(t(lang, "nav_idps"))}</th><th>${esc(t(lang, "status_completed"))}</th><th>${esc(t(lang, "status_failed"))}</th></tr></thead><tbody>${s.daily.per_idp.map((d) => `<tr><td class="mono">${esc(d.idp)}</td><td>${d.completed}</td><td>${d.failed}</td></tr>`).join("")}</tbody></table></div>` : ""}`) : ""}
 ${sec(t(lang, "status_version"), kv([["RoamID", esc(s.version)], ["Build", `<code id="build">${esc(s.build || "-")}</code>`], ["Deployment", `<code>${esc(s.deployment || "-")}</code>`]]))}
 <p class="lead"><a href="/status.json">/status.json</a></p>`;
-  return contentPage({ lang, theme, path: "/status", active: "status", title: t(lang, "status_title"), body });
+  return contentPage({ lang, theme, path: localPath(lang, "/status"), active: "status", title: t(lang, "status_title"), body });
 }
 
 export function demoPage({ lang, theme, path, clientId }) {

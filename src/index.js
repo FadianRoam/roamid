@@ -17,7 +17,7 @@ import { idpMetadataHandler } from "./saml/idp.js";
 import { demoSamlStart, demoSamlAcs, demoSamlPage } from "./saml/demo.js";
 import { samlKeys, certInfo } from "./saml/certs.js";
 import { probeIdps } from "./health.js";
-import { pickLang, pickTheme, LANG_COOKIE, THEME_COOKIE, localName, isTwinPath, isEnglishOnlyPath, localPath } from "./ui/i18n.js";
+import { pickLang, pickTheme, LANG_COOKIE, THEME_COOKIE, localName, isTwinPath, isEnglishOnlyPath, isConsolePath, localPath } from "./ui/i18n.js";
 import { homePage, pickerPage, idpsPage, statusPage, errorPage } from "./ui/pages.js";
 import { demoPage } from "./ui/demo.js";
 import { VERSION } from "./version.js";
@@ -31,7 +31,8 @@ const PUBLIC_CACHE = "public, max-age=300";
 
 function view(request) {
   const u = new URL(request.url);
-  return { lang: pickLang(request), theme: pickTheme(request), nonce: newNonce(), path: u.pathname + u.search };
+  const lang = pickLang(request);
+  return { lang, theme: pickTheme(request), nonce: newNonce(), path: localPath(lang, u.pathname) + u.search };
 }
 
 function publicIdp(i, health) {
@@ -115,20 +116,30 @@ function prefs(request) {
   return redirect(next, { status: 303, cookies });
 }
 
-// Public pages: /path is English, /zh/path Chinese (the home pages are / and
-// /zh/). .html, .md, a trailing slash, /index.html, ?lang= (other parameters
-// kept) and /zh answer 301 with the canonical URL under BASE_URL (never the
-// request host). /zh/ before an English-only page goes to that page; before
-// anything else it is 404. Accept-Language and the cookie never change a
-// public URL. Returns a Response, or the request rewritten to the inner path
+// Public pages and the console: /path is English, /zh/path Chinese (the home
+// pages are / and /zh/). .html, .md, a trailing slash, /index.html, ?lang=
+// (other parameters kept) and /zh answer 301 with the canonical URL under
+// BASE_URL (never the request host). /zh/ before an English-only page goes to
+// that page; before anything else it is 404. Accept-Language and the cookie
+// never change a public URL; the console without /zh/ goes to /zh/... (302)
+// when they say Chinese. A form post to /path or /zh/path keeps the language
+// of its URL. Returns a Response, or the request rewritten to the inner path
 // with the language in x-roamid-twin (for pickLang).
-function languageRoute(request, env) {
+async function languageRoute(request, env) {
   const url = new URL(request.url);
   const base = String(env.BASE_URL || url.origin).replace(/\/+$/, "");
   const headers = new Headers(request.headers);
   headers.delete("x-roamid-twin");
   const cleaned = () => (request.headers.has("x-roamid-twin") ? new Request(request.url, { method: request.method, headers, body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body, redirect: "manual" }) : request);
-  if (request.method !== "GET" && request.method !== "HEAD") return cleaned();
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    // Form posts to a page with a twin: the URL's language, the body buffered (forms are small).
+    const zhPost = url.pathname.startsWith("/zh/");
+    const innerPost = zhPost ? url.pathname.slice(3) : url.pathname;
+    if (!isTwinPath(innerPost)) return zhPost ? null : cleaned();
+    headers.set("x-roamid-twin", zhPost ? "zh" : "en");
+    url.pathname = innerPost;
+    return new Request(url.href, { method: request.method, headers, body: await request.arrayBuffer(), redirect: "manual" });
+  }
   const p = url.pathname;
   const zh = p === "/zh" || p.startsWith("/zh/");
   let inner = zh ? p.slice(3) || "/" : p;
@@ -152,13 +163,15 @@ function languageRoute(request, env) {
   }
   const lang = q === "zh" || q === "en" ? q : zh ? "zh" : "en";
   if (moved || q !== null) return Response.redirect(`${base}${localPath(lang, inner)}${qs}`, 301);
+  // The console without /zh/: the cookie, or without one Accept-Language, picks the default.
+  if (!zh && isConsolePath(inner) && pickLang(cleaned()) === "zh") return new Response(null, { status: 302, headers: { Location: `${base}${localPath("zh", inner)}${qs}`, "Cache-Control": "no-store", Vary: "Cookie, Accept-Language" } });
   headers.set("x-roamid-twin", lang);
   url.pathname = inner;
   return new Request(url.href, { method: request.method, headers, redirect: "manual" });
 }
 
 export async function handle(request, env, ctx) {
-  const routed = languageRoute(request, env);
+  const routed = await languageRoute(request, env);
   if (routed instanceof Response) return routed;
   if (routed === null) { const v = view(request); return html(errorPage({ ...v, path: "/", code: "not_found", requestId: request.headers.get("CF-Ray") || "-" }), { status: 404, nonce: v.nonce }); }
   request = routed;
@@ -187,7 +200,7 @@ export async function handle(request, env, ctx) {
   if (p === "/prefs" && m === "GET") return prefs(request);
   if (p === "/console" || p.startsWith("/console/")) { const r = await handleConsole(request, env, p); if (r) return r; }
   if (p === "/report") { const r = await handleReport(request, env); if (r) return r; }
-  if (p === "/admin") return new Response(null, { status: 302, headers: { Location: "/admin/reports" } });
+  if (p === "/admin") return new Response(null, { status: 302, headers: { Location: localPath(pickLang(request), "/admin/reports") } });
   if (p === "/admin/reports" || p.startsWith("/admin/target")) { const r = await handleAdmin(request, env, p); if (r) return r; }
   if ((p === "/apps" || p === "/apps.json" || p.startsWith("/apps/")) && (m === "GET" || m === "HEAD")) { const r = await handleApps(request, env, p); if (r) return r; }
   if (m !== "GET" && m !== "HEAD") return json({ error: "method_not_allowed" }, { status: 405 });

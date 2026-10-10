@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.1 (2026-10-10)
+
+- The console and the operator queue have Chinese URLs like the public pages: `/zh/console/...`, `/zh/admin/...`. Forms keep the language of the page they were sent from (also the report form). Without `/zh/`, the language cookie (or, without one, `Accept-Language`) decides whether `/console` goes to `/zh/console`; the language switch sets the cookie. Signing in from a Chinese console page shows the identity provider choice in Chinese.
+- Report form: the application or identity provider is chosen from a searchable list; an identifier, or an exact name or domain, can still be typed in.
+- Console: form errors name the field (a link to it, marked in the form); rate limits and locked applications say what to do; "Check now" says whether the proof was found and why not; copy buttons for the client secret, the invitation link and identifiers; the identity provider by name; readable sign-in failure reasons; an empty application list shows the steps to go live; an application that is missing or not yours, an expired form and owner-only actions have their own pages.
+- Operator queue: names instead of identifiers, the lookup searches names, domains and identifiers, the decision basis shows each report's time and first line, the history names the operator by email (migration `0009_audit_actor_email.sql`). Anyone else sees that the console is for the instance's operators, with a link to `docs/policy.md`.
+- Sign-in error page: technical details are folded away.
+
 ## 1.5.0 (2026-10-09)
 
 - Identity provider entries declare `domain`, the operator's own domain: the issuer (SAML: metadata or SSO URL) and the homepage are on it, and it is proven by the DNS TXT record `_roamid.<domain>` = `roamid-idp=<id>`. Required for new entries; RoamID rechecks it daily.

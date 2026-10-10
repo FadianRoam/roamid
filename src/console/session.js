@@ -7,18 +7,23 @@ import { b64url, randomToken, sha256b64url, safeEqual } from "../lib/b64.js";
 import { cookie, getCookie, redirect, now, readForm } from "../lib/http.js";
 import { CONSOLE_CLIENT_ID } from "../apps/store.js";
 import { token } from "../oidc/op.js";
+import { localPath } from "../ui/i18n.js";
 
 export const SESSION_COOKIE = "__Host-rid_cs";
 const LOGIN_COOKIE = "__Host-rid_cl";
 const SESSION_TTL = 8 * 3600;
 
-const safeNext = (n) => (typeof n === "string" && /^\/(console|admin)(\/|$|\?)/.test(n) && !n.startsWith("//") ? n : "/console");
+// Where to go after signing in: a console or operator page, in either language.
+const safeNext = (n) => (typeof n === "string" && /^\/(zh\/)?(console|admin)(\/|$|\?)/.test(n) && !n.startsWith("//") ? n : "/console");
+const consoleOf = (next) => (/^\/zh\//.test(next || "") ? "/zh/console" : "/console");
 
 export async function loginStart(request, env) {
   const next = safeNext(new URL(request.url).searchParams.get("next"));
   const verifier = randomToken(32), state = randomToken(16);
   const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
   const q = new URLSearchParams({ client_id: CONSOLE_CLIENT_ID, redirect_uri: `${env.BASE_URL}/console/callback`, response_type: "code", scope: "openid email profile", state, code_challenge: challenge, code_challenge_method: "S256", nonce: randomToken(12) });
+  // The identity provider choice in the console's language.
+  if (next.startsWith("/zh/")) q.set("ui_locales", "zh-CN");
   const c = btoa(JSON.stringify({ s: state, v: verifier, n: next }));
   return redirect(`/authorize?${q}`, { status: 303, cookies: [cookie(LOGIN_COOKIE, c, { maxAge: 600 })] });
 }
@@ -29,12 +34,13 @@ export async function loginCallback(request, env) {
   try { st = JSON.parse(atob(getCookie(request, LOGIN_COOKIE) || "")); } catch { st = null; }
   const clear = cookie(LOGIN_COOKIE, "", { maxAge: 0 });
   if (!st || !q.get("state") || !safeEqual(q.get("state"), st.s)) return redirect("/console?signin=expired", { cookies: [clear] });
-  if (q.get("error") || !q.get("code")) return redirect("/console", { cookies: [clear] });
-  if (q.get("iss") !== env.BASE_URL) return redirect("/console?signin=failed", { cookies: [clear] });
+  const home = consoleOf(st.n);
+  if (q.get("error") || !q.get("code")) return redirect(home, { cookies: [clear] });
+  if (q.get("iss") !== env.BASE_URL) return redirect(`${home}?signin=failed`, { cookies: [clear] });
   // Redeem the code with the token endpoint's own checks.
   const body = new URLSearchParams({ grant_type: "authorization_code", code: q.get("code"), redirect_uri: `${env.BASE_URL}/console/callback`, client_id: CONSOLE_CLIENT_ID, code_verifier: st.v });
   const res = await token(new Request(`${env.BASE_URL}/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }), env);
-  if (!res.ok) return redirect("/console?signin=failed", { cookies: [clear] });
+  if (!res.ok) return redirect(`${home}?signin=failed`, { cookies: [clear] });
   const tok = await res.json();
   const claims = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))));
   const sid = randomToken(32), csrf = randomToken(24);
@@ -50,10 +56,12 @@ export async function getSession(request, env) {
   return row && row.expires > now() ? row : null;
 }
 
-export async function logoutSession(request, env) {
+// then: "login" signs in again at once (to change accounts).
+export async function logoutSession(request, env, { lang = "en", then = null } = {}) {
   const sid = getCookie(request, SESSION_COOKIE);
   if (sid) await env.DB.prepare("DELETE FROM console_sessions WHERE sid_hash = ?").bind(await sha256b64url(sid)).run();
-  return redirect("/console", { status: 303, cookies: [cookie(SESSION_COOKIE, "", { maxAge: 0 })] });
+  const home = localPath(lang, "/console");
+  return redirect(then === "login" ? `/console/login?next=${encodeURIComponent(home)}` : home, { status: 303, cookies: [cookie(SESSION_COOKIE, "", { maxAge: 0 })] });
 }
 
 // A state-changing form post: same origin, a session, and its CSRF token.

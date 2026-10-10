@@ -18,7 +18,7 @@ test("language routes: /x English, /zh/x Chinese; variants answer 301 with the c
   assert.match(await (await get(h, "/zh/")).text(), /<html lang="zh-CN"/);
   for (const [from, to] of [
     ["/zh", "/zh/"], ["/idps/", "/idps"], ["/idps.html", "/idps"], ["/zh/idps/", "/zh/idps"], ["/index.html", "/"], ["/zh/index.html", "/zh/"],
-    ["/status.md", "/status"], ["/idps?lang=zh&sort=added", "/zh/idps?sort=added"], ["/zh/idps?lang=en", "/idps"], ["/zh/console", "/console"],
+    ["/status.md", "/status"], ["/idps?lang=zh&sort=added", "/zh/idps?sort=added"], ["/zh/idps?lang=en", "/idps"],
   ]) {
     const r = await h.request(from, { headers: { Host: "origin.example.test" } });
     assert.equal(r.status, 301, from);
