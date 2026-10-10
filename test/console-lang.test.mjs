@@ -104,6 +104,8 @@ test("signing in from /zh/console: the picker in Chinese, back to /zh/console; t
   assert.match(body, /<html lang="zh-CN"/);
   assert.match(body, /data-copy="client-secret"/, "copy button for the secret");
   assert.match(body, /data-copy="client-id"/);
+  assert.match(body, /<div class="notice ok"><div><p>/, "the notice's text is one column");
+  assert.doesNotMatch(body, />proof_pending</, "every state has a text");
 
   // Check now: says whether the proof was found and why not, in Chinese.
   r = await post(h, `/zh/console/app/${id}/check`, {});
