@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/idp.schema.json",
+  "id": "alue",
+  "protocol": "oidc",
+  "name": { "en": "Alue Auth" },
+  "issuer": "https://auth.alue.uk",
+  "homepage": "https://auth.alue.uk/",
+  "domain": "alue.uk",
+  "contact": { "github": "kisukri", "email": "admin@alue.uk" },
+  "client_id": "53230c68-d1c8-4708-87b5-486d471ba3a9",
+  "client_auth": "client_secret_basic",
+  "scopes": ["openid", "email", "profile"],
+  "email_domains": ["alue.uk"],
+  "status": "active"
+}
