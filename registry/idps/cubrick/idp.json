@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../schema/idp-saml2.schema.json",
+  "id": "cubrick",
+  "protocol": "saml2",
+  "name": {
+    "en": "Brick Staff House",
+    "zh": "砖头员工之家"
+  },
+  "homepage": "https://idp.zhuantou.com.cn/",
+  "contact": {
+    "github": "daxi20",
+    "email": "noc.brnic@zhuantou.com.cn"
+  },
+  "metadata_url": "https://idp.zhuantou.com.cn/api/saml/metadata?app_id=10",
+  "entity_id": "id.fadianro.am",
+  "sub_source": "nameid",
+  "email_attribute_verified": true,
+  "domain": "zhuantou.com.cn",
+  "email_domains": [
+    "zhuantou.com.cn"
+  ],
+  "status": "active"
+}
