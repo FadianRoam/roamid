@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../schema/idp.schema.json",
+  "id": "rcd",
+  "protocol": "oidc",
+  "name": {
+    "en": "RCD Identity",
+    "zh": "RCD 身份"
+  },
+  "issuer": "https://auth.rcd.network",
+  "homepage": "https://auth.rcd.network/",
+  "contact": {
+    "github": "RedTeaDev",
+    "email": "support@redcoke.dev"
+  },
+  "client_id": "rcd_TKsjEWzlQtlynMPS",
+  "client_auth": "client_secret_basic",
+  "scopes": [
+    "openid",
+    "email",
+    "profile"
+  ],
+  "domain": "rcd.network",
+  "email_domains": [
+    "redcoke.dev",
+    "rcd.network"
+  ],
+  "status": "active"
+}
